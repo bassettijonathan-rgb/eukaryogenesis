@@ -1,0 +1,97 @@
+{
+  "checks": [
+    {
+      "id": "asgard",
+      "how": "tuned",
+      "what": "An archaeon on its own: its size and how fast it divides",
+      "model": "0.47 µm across, divides every 17 days",
+      "real": "The Asgard archaeon grown by Imachi and colleagues: 0.3 to 0.75 µm across, divides every 14 to 25 days",
+      "pass": true,
+      "source": "Imachi et al. 2020"
+    },
+    {
+      "id": "alone",
+      "how": "emerges",
+      "what": "Without the merger, archaea stay small and simple",
+      "model": "after 300,000 generations: 3,624 genes, 0.056 µm³, no eukaryotic feature complete",
+      "real": "No archaeon or bacterium has a nucleus, an inner membrane system and phagocytosis; Asgard archaea carry only some of the genes for them",
+      "pass": true,
+      "source": "Imachi et al. 2020; Lane & Martin 2010"
+    },
+    {
+      "id": "once",
+      "how": "emerges",
+      "what": "One merger founds every cell at the end",
+      "model": "2 archaea took a partner inside; at the end every cell descends from one of them",
+      "real": "All mitochondria descend from one alphaproteobacterium",
+      "pass": true,
+      "source": "Roger, Muñoz-Gómez & Kamikawa 2017"
+    },
+    {
+      "id": "mtGenes",
+      "how": "emerges",
+      "what": "Genes left in the guest genome at the end",
+      "model": "50 genes, 29 of them for proteins: 0.97 % of the 3,000 protein genes it started with",
+      "real": "37 in humans (13 for proteins) up to 100 in the protist Andalucia (66 for proteins); free-living relatives have thousands",
+      "pass": true,
+      "source": "Anderson et al. 1981; Burger et al. 2013"
+    },
+    {
+      "id": "which",
+      "how": "built",
+      "what": "The genes that stay are the oily core of the respiratory chain",
+      "model": "cox1 and cob kept; kept proteins have 4.5 helices in the membrane on average, moved ones 0.58",
+      "real": "cox1 and cob stay in almost every mitochondrial genome; the proteins mitochondria still make are the most membrane-bound subunits",
+      "pass": true,
+      "source": "Björkholm et al. 2015; Johnston & Williams 2016"
+    },
+    {
+      "id": "noImport",
+      "how": "built",
+      "what": "Without protein import, the guest genome stops shrinking much sooner",
+      "model": "733 genes left, 15 times as many as with import",
+      "real": "Insect endosymbionts, whose hosts send in few proteins, keep about 120 to 650 genes; mitochondria keep a handful to 100",
+      "pass": true,
+      "source": "McCutcheon & Moran 2012"
+    },
+    {
+      "id": "host",
+      "how": "tuned",
+      "what": "Genes in the host genome at the end",
+      "model": "16,504 genes, 4.6 times the archaeon’s",
+      "real": "Free-living protists have 6,000 to 40,000 genes (yeast about 6,000, Naegleria about 16,000); Asgard archaea about 4,000 to 5,000",
+      "pass": true,
+      "source": "Goffeau et al. 1996; Fritz-Laylin et al. 2010; Spang et al. 2015"
+    },
+    {
+      "id": "size",
+      "how": "tuned",
+      "what": "How big the cells grow, compared with a bacterium",
+      "model": "10,000 µm³, 27 µm across: 10,000 times the bacterium",
+      "real": "An average protist has about 15,000 times the mass of an average bacterium (accept 1,500 to 150,000)",
+      "pass": true,
+      "source": "Lane & Martin 2010"
+    },
+    {
+      "id": "perGene",
+      "how": "emerges",
+      "what": "Power per gene, compared with a bacterium",
+      "model": "8,000 times as much",
+      "real": "Four to five orders of magnitude more: 10,000 to 100,000 times as much (accept 3,000 to 300,000)",
+      "pass": true,
+      "source": "Lane & Martin 2010",
+      "note": "Nothing aims at this number, but it rests on the cell size and genome size, which were tuned."
+    },
+    {
+      "id": "mitoShare",
+      "how": "tuned",
+      "what": "Share of the cell taken up by mitochondria",
+      "model": "33 %",
+      "real": "From about 8 % of a white blood cell to 22 % of a liver cell and nearly half of a heart muscle cell (accept 5 to 50 %)",
+      "pass": true,
+      "source": "Weibel et al. 1969; David 1977"
+    }
+  ],
+  "passed": 10,
+  "total": 10
+}
