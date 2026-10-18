@@ -1,0 +1,1508 @@
+<title>Eukaryogenesis Simulation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="A simulation of eukaryogenesis: an archaeon takes a bacterium inside, the guest's genes move to the host, and the guest becomes the mitochondrion that powers every complex cell.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..800&family=Figtree:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* A fluorescence microscope: the picture is always a dark field lit by
+   stains (amber archaea, green guests, coral mitochondria, blue DNA), and
+   the page around it is cool lilac paper or the dim room at the scope. */
+
+:root {
+  color-scheme: light;
+  --bg: #f5f3fa;
+  --paper: #fdfcff;
+  --surface: #ebe7f4;
+  --ink: #1b1928;
+  --ink-2: #484560;
+  --ink-3: #6c6984;
+  --line: #dcd7e9;
+  --accent: #5a3fcf;
+  --accent-ink: #ffffff;
+  --arch: #a8650f;
+  --guest: #18855a;
+  --mito: #cc4127;
+  --dna: #3953cc;
+  --feature: #6c48c8;
+  --good: #1c7a4c;
+  --good-bg: rgba(28, 122, 76, 0.12);
+  --bad: #b2362c;
+  --bad-bg: rgba(178, 54, 44, 0.1);
+  --plot: #fdfcff;
+  --ref: rgba(27, 25, 40, 0.07);
+  --focus: #5a3fcf;
+  --field: #070810;
+  --font-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Archivo', 'Figtree', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --gl: max(16px, env(safe-area-inset-left, 0px));
+  --gr: max(16px, env(safe-area-inset-right, 0px));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #0e0d16;
+    --paper: #161522;
+    --surface: #1f1d2e;
+    --ink: #ecebf6;
+    --ink-2: #b7b4cb;
+    --ink-3: #8783a0;
+    --line: #2b2940;
+    --accent: #a28dff;
+    --accent-ink: #120c2b;
+    --arch: #f0b04c;
+    --guest: #5fd39a;
+    --mito: #ff7a5c;
+    --dna: #8ea2ff;
+    --feature: #c0a8ff;
+    --good: #5fd096;
+    --good-bg: rgba(95, 208, 150, 0.13);
+    --bad: #f27c69;
+    --bad-bg: rgba(242, 124, 105, 0.12);
+    --plot: #13121e;
+    --ref: rgba(236, 235, 246, 0.07);
+    --focus: #a28dff;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e0d16;
+  --paper: #161522;
+  --surface: #1f1d2e;
+  --ink: #ecebf6;
+  --ink-2: #b7b4cb;
+  --ink-3: #8783a0;
+  --line: #2b2940;
+  --accent: #a28dff;
+  --accent-ink: #120c2b;
+  --arch: #f0b04c;
+  --guest: #5fd39a;
+  --mito: #ff7a5c;
+  --dna: #8ea2ff;
+  --feature: #c0a8ff;
+  --good: #5fd096;
+  --good-bg: rgba(95, 208, 150, 0.13);
+  --bad: #f27c69;
+  --bad-bg: rgba(242, 124, 105, 0.12);
+  --plot: #13121e;
+  --ref: rgba(236, 235, 246, 0.07);
+  --focus: #a28dff;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 var(--font-body);
+  overflow-x: hidden;
+}
+
+/* paints the band above the sticky bar on phones with a notch */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  background: var(--bg);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.nw {
+  white-space: nowrap;
+}
+
+sup {
+  font-size: 0.68em;
+  line-height: 0;
+  vertical-align: 0.48em;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.app {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding-block: 0 32px;
+  padding-left: var(--gl);
+  padding-right: var(--gr);
+}
+
+/* ---- masthead and the sticky bar */
+
+.masthead {
+  padding: 20px 0 10px;
+}
+
+.stains {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+}
+
+.stains li::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+  vertical-align: 1px;
+}
+
+.stains .s-arch::before {
+  color: var(--arch);
+}
+.stains .s-guest::before {
+  color: var(--guest);
+}
+.stains .s-mito::before {
+  color: var(--mito);
+}
+.stains .s-dna::before {
+  color: var(--dna);
+}
+
+.masthead h1 {
+  font-family: var(--font-display);
+  font-stretch: 118%;
+  font-weight: 800;
+  font-size: clamp(30px, 7.4vw, 50px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.masthead p {
+  margin: 8px 0 0;
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+
+.bar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 0 calc(-1 * var(--gr)) 14px calc(-1 * var(--gl));
+  padding: 8px var(--gr) 0 var(--gl);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 14.5px;
+  cursor: pointer;
+  flex: none;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.icon-btn.play {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+  padding: 0 15px 0 11px;
+  min-width: 92px;
+}
+
+.clock {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+  padding-left: 4px;
+}
+
+.count {
+  font: 500 24px var(--font-mono);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock .unit {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.speed select {
+  height: 40px;
+  border-radius: 999px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-size: 14px;
+  cursor: pointer;
+  max-width: 118px;
+}
+
+@media (max-width: 429px) {
+  .icon-btn.play {
+    min-width: 44px;
+    padding: 0 12px;
+  }
+
+  .icon-btn.play span {
+    display: none;
+  }
+
+  .count {
+    font-size: 21px;
+  }
+
+  .speed select {
+    max-width: 100px;
+    padding: 0 6px;
+  }
+}
+
+.timeline {
+  flex: 1 1 100%;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.timeline .track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.timeline .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: linear-gradient(90deg, var(--arch), var(--guest) 30%, var(--mito) 62%, var(--dna));
+  background-size: 100vw 100%;
+}
+
+/* ---- columns */
+
+.cols {
+  display: block;
+}
+
+.stage,
+#panel-learn,
+#panel-watch,
+#charts,
+#side {
+  scroll-margin-top: calc(env(safe-area-inset-top, 0px) + var(--bar-h, 78px) + 8px);
+}
+
+/* the microscope field: dark in every theme */
+.scene-wrap {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--field);
+  aspect-ratio: 16 / 9.5;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.scene-wrap[data-view='genes'],
+.scene-wrap[data-view='energy'] {
+  aspect-ratio: 1 / 1;
+}
+
+@media (min-width: 560px) {
+  .scene-wrap[data-view='genes'],
+  .scene-wrap[data-view='energy'] {
+    aspect-ratio: 16 / 11;
+  }
+}
+
+@media (min-width: 1040px) {
+  .scene-wrap,
+  .scene-wrap[data-view='genes'],
+  .scene-wrap[data-view='energy'] {
+    aspect-ratio: 2 / 1;
+  }
+}
+
+#scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.scene-wrap[data-view='genes'] #scene {
+  cursor: pointer;
+}
+
+.scene-help {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(236, 234, 248, 0.32);
+  background: rgba(16, 17, 32, 0.72);
+  color: #ecebf6;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 20px);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(236, 234, 248, 0.92);
+  color: #14121f;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.error {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bad-bg);
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 6px;
+}
+
+.chip {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-2);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+
+.chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.key i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+.key.faint {
+  color: var(--ink-3);
+}
+
+.narrator {
+  font-size: 17px;
+  line-height: 1.45;
+  margin: 12px 0;
+  min-height: 4.4em;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 700;
+  color: var(--ink-3);
+  vertical-align: 2px;
+  margin-right: 2px;
+}
+
+.tag-merger {
+  color: var(--guest);
+}
+.tag-host {
+  color: var(--arch);
+}
+.tag-genes {
+  color: var(--dna);
+}
+.tag-cell {
+  color: var(--mito);
+}
+.tag-lab {
+  color: var(--ink);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--ink-3);
+  padding: 0;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.term {
+  background: none;
+  border: 0;
+  padding: 0;
+  border-bottom: 1.5px dotted var(--accent);
+  cursor: pointer;
+  color: inherit;
+  text-align: inherit;
+}
+
+.readouts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+@media (min-width: 440px) {
+  .readouts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 760px) {
+  .readouts {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+.readout {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  text-align: left;
+  cursor: pointer;
+}
+
+.r-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
+
+.r-value {
+  font: 500 15px var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.r-unit {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.readout.flash {
+  animation: flash 1.4s ease 2;
+}
+
+@keyframes flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  40% {
+    box-shadow: 0 0 0 3px var(--mito);
+  }
+}
+
+/* ---- tabs and panels */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin: 24px 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 4px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--ink-3);
+  font-weight: 700;
+  font-size: 14.5px;
+  cursor: pointer;
+}
+
+.tabs button[aria-selected='true'] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.panel {
+  display: none;
+}
+
+.panel.active {
+  display: block;
+}
+
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-stretch: 108%;
+  letter-spacing: -0.01em;
+}
+
+.panel h2 {
+  font-size: 25px;
+  line-height: 1.15;
+  margin: 2px 0 10px;
+}
+
+.panel h3 {
+  font-size: 16.5px;
+  margin: 22px 0 8px;
+}
+
+.lede {
+  color: var(--ink-2);
+  margin: 0 0 8px;
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin: 0 0 10px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-weight: 700;
+  font-size: 14.5px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.btn.small {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- charts */
+
+#back-to-lesson {
+  margin: 0 0 10px;
+}
+
+#charts {
+  display: block;
+  width: 100%;
+  height: 560px;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+
+@media (min-width: 700px) {
+  #charts {
+    height: 620px;
+  }
+}
+
+.chart-caption {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  margin: 10px 0 8px;
+  min-height: 3em;
+}
+
+.chart-caption b {
+  color: var(--ink);
+}
+
+.events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+
+.events li {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  gap: 0 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ev-age {
+  font: 500 13px var(--font-mono);
+  color: var(--ink-2);
+  grid-row: span 2;
+  padding-top: 1px;
+}
+
+/* ---- Learn */
+
+.chapter-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.dots {
+  display: flex;
+  gap: 0;
+}
+
+.dot {
+  position: relative;
+  width: 22px;
+  height: 26px;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.dot::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-3);
+}
+
+.dot.done::before {
+  background: var(--ink-3);
+}
+
+.dot.on::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.chapter p {
+  margin: 0 0 12px;
+  max-width: 64ch;
+}
+
+.predict {
+  margin: 18px 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--mito);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.predict .kicker {
+  color: var(--mito);
+}
+
+.predict-q {
+  font-weight: 700;
+  margin: 4px 0 10px !important;
+}
+
+.options {
+  display: grid;
+  gap: 6px;
+}
+
+.option {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  text-align: left;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.option.right {
+  border-color: var(--good);
+  background: var(--good-bg);
+}
+
+.option.wrong {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+}
+
+.option.dim {
+  opacity: 0.55;
+}
+
+.option[aria-disabled='true'] {
+  cursor: default;
+}
+
+.predict-a {
+  margin: 12px 0 0 !important;
+}
+
+.show {
+  margin: 16px 0;
+}
+
+.look {
+  margin: 12px 0 0 !important;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.glossary summary {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-display);
+  font-stretch: 108%;
+  font-weight: 700;
+  font-size: 16.5px;
+  cursor: pointer;
+}
+
+.glossary dl {
+  margin: 0;
+}
+
+.glossary dt {
+  font-weight: 700;
+  margin-top: 12px;
+}
+
+.glossary dd {
+  margin: 2px 0 0;
+  color: var(--ink-2);
+}
+
+/* ---- Lab */
+
+.scenarios {
+  display: grid;
+  gap: 6px;
+}
+
+@media (min-width: 560px) and (max-width: 1039px) {
+  .scenarios {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.scenario,
+.inject {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  text-align: left;
+  font-size: 14.5px;
+  cursor: pointer;
+}
+
+.scenario span,
+.inject span {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.scenario[aria-checked='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.seed-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.seed-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.seed-field input {
+  width: 96px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-family: var(--font-mono);
+}
+
+.sliders {
+  display: grid;
+  gap: 14px;
+}
+
+.slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 8px;
+  font-size: 14.5px;
+}
+
+.slider input {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.slider output {
+  font: 500 13px var(--font-mono);
+  color: var(--ink-2);
+}
+
+.toggles {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14.5px;
+  cursor: pointer;
+}
+
+.toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+  flex: none;
+}
+
+.toggle span {
+  color: var(--ink-2);
+}
+
+.toggle b {
+  color: var(--ink);
+}
+
+.lab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.injects {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+/* ---- Validation */
+
+.check-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.score {
+  font-size: 16px;
+  margin: 12px 0 4px;
+}
+
+.score b {
+  font: 800 30px var(--font-display);
+  font-stretch: 118%;
+  margin-right: 2px;
+}
+
+.check-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 4px 0 14px;
+}
+
+.check-run .hint {
+  margin: 0;
+}
+
+.progress {
+  flex: 1 1 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--guest);
+}
+
+.how {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  margin-right: 4px;
+}
+
+.how-emerges {
+  color: var(--dna);
+}
+.how-tuned {
+  color: var(--arch);
+}
+.how-built {
+  color: var(--feature);
+}
+
+.how-key {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px 10px;
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.how-key dt,
+.how-key dd {
+  margin: 0;
+}
+
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.check {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.check-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14.5px;
+}
+
+.badge {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pass .badge {
+  background: var(--good-bg);
+  color: var(--good);
+}
+
+.miss .badge {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+
+.check dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 10px;
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+
+.check dt {
+  padding-top: 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.check dd {
+  margin: 0;
+}
+
+.why {
+  margin: 8px 0 4px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.source {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* ---- the explanation sheet */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(8, 7, 16, 0.46);
+}
+
+.sheet {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 41;
+  transform: translateX(-50%);
+  width: min(560px, 100%);
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 18px max(18px, env(safe-area-inset-right, 0px)) calc(22px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
+  border-radius: 14px 14px 0 0;
+  background: var(--paper);
+  box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.25);
+}
+
+@media (min-width: 700px) {
+  .sheet {
+    bottom: 24px;
+    border-radius: 14px;
+  }
+}
+
+.sheet h2 {
+  font-size: 22px;
+  margin: 4px 44px 6px 0;
+}
+
+.sheet p {
+  margin: 0 0 10px;
+}
+
+.sheet-value {
+  font: 500 18px var(--font-mono);
+}
+
+.sheet-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.foot {
+  margin-top: 36px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.foot a {
+  color: var(--ink-2);
+}
+
+/* ---- wide screens: picture and charts on the left, the rest on the right */
+
+@media (min-width: 1040px) {
+  .cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    gap: 32px;
+    align-items: start;
+  }
+
+  .side {
+    position: sticky;
+    top: calc(env(safe-area-inset-top, 0px) + var(--bar-h, 78px) + 10px);
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - var(--bar-h, 78px) - 20px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 6px 20px 2px;
+  }
+
+  .tabs {
+    margin-top: 0;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg);
+  }
+
+  .tabs [data-tab='watch'] {
+    display: none;
+  }
+
+  #panel-watch {
+    margin-top: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .readout.flash {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--mito);
+  }
+}
+</style>
+
+<div class="app" id="app">
+  <header class="masthead">
+    <ul class="stains" aria-hidden="true">
+      <li class="s-arch">archaeon</li>
+      <li class="s-guest">guest</li>
+      <li class="s-mito">mitochondrion</li>
+      <li class="s-dna">nucleus</li>
+    </ul>
+    <h1>Eukaryogenesis</h1>
+    <p>How a small archaeon took a bacterium inside itself, and the guest became the mitochondrion that powers every complex cell.</p>
+  </header>
+
+  <div class="bar" id="bar">
+    <button type="button" class="icon-btn play" id="play" aria-label="Play"></button>
+    <button type="button" class="icon-btn" id="step" aria-label="Step 100 generations" title="Step 100 generations"></button>
+    <div class="clock" aria-live="off">
+      <span class="count" id="gen">0</span>
+      <span class="unit">generations</span>
+    </div>
+    <label class="speed"><span class="sr">Speed</span><select id="speed" title="Speed"></select></label>
+    <button type="button" class="icon-btn" id="restart" aria-label="Restart from the first generation" title="Restart"></button>
+    <div class="timeline" id="timeline" role="slider" aria-label="Generations: tap ahead to run there" aria-valuemin="0" aria-valuemax="300000" aria-valuenow="0" tabindex="-1">
+      <div class="track"><div class="fill" id="tl-fill"></div></div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <main class="main-col" id="main-col">
+      <section class="stage" id="stage" aria-label="The cells now">
+        <div class="error" id="error" role="alert" hidden></div>
+        <div class="scene-wrap" id="scene-wrap" data-view="cells">
+          <canvas id="scene" role="img" aria-label="A sample of the cells, drawn like a fluorescence micrograph"></canvas>
+          <button type="button" class="scene-help" id="scene-help" aria-label="How to read the picture">?</button>
+          <div class="toast" id="toast" role="status" hidden></div>
+        </div>
+        <div class="views" id="views" role="group" aria-label="Show"></div>
+        <div class="legend" id="legend"></div>
+        <p class="narrator" id="narrator"></p>
+        <div class="readouts" id="readouts"></div>
+      </section>
+    </main>
+
+    <aside class="side" id="side">
+      <nav class="tabs" id="tabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" data-tab="watch">Charts</button>
+        <button type="button" role="tab" data-tab="learn">Learn</button>
+        <button type="button" role="tab" data-tab="lab">Lab</button>
+        <button type="button" role="tab" data-tab="check">Validation</button>
+      </nav>
+      <section class="panel" data-panel="watch" id="panel-watch" aria-label="Charts">
+        <button type="button" class="btn ghost small" id="back-to-lesson" hidden>← Back to the lesson</button>
+        <canvas id="charts" role="img" aria-label="Charts of the guest and host genomes, cell volume, power per gene and doubling time through the run, with strips showing when guests spread and when each eukaryotic feature was finished"></canvas>
+        <p class="chart-caption" id="chart-caption"></p>
+        <h3>What happened</h3>
+        <ol class="events" id="events"></ol>
+      </section>
+      <section class="panel" data-panel="learn" id="panel-learn" aria-label="Learn"></section>
+      <section class="panel" data-panel="lab" id="panel-lab" aria-label="Lab"></section>
+      <section class="panel" data-panel="check" id="panel-check" aria-label="Validation"></section>
+    </aside>
+  </div>
+
+  <footer class="foot">
+    A teaching model, not a record of the past: 500 cells stand for a whole population, rates are sped up, sizes are squeezed in the picture and many numbers are tuned.
+    <a href="https://github.com/bassettijonathan-rgb/eukaryogenesis" target="_blank" rel="noopener">Code and notes</a>
+  </footer>
+</div>
+
+<div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Explanation" hidden>
+  <button type="button" class="sheet-close" id="sheet-close" aria-label="Close">×</button>
+  <div id="sheet-body"></div>
+</div>
+
+<script>
+(()=>{var _={checks:[{id:"asgard",how:"tuned",what:"An archaeon on its own: its size and how fast it divides",model:"0.47 µm across, divides every 17 days",real:"The Asgard archaeon grown by Imachi and colleagues: 0.3 to 0.75 µm across, divides every 14 to 25 days",pass:!0,source:"Imachi et al. 2020"},{id:"alone",how:"emerges",what:"Without the merger, archaea stay small and simple",model:"after 300,000 generations: 3,624 genes, 0.056 µm³, no eukaryotic feature complete",real:"No archaeon or bacterium has a nucleus, an inner membrane system and phagocytosis; Asgard archaea carry only some of the genes for them",pass:!0,source:"Imachi et al. 2020; Lane & Martin 2010"},{id:"once",how:"emerges",what:"One merger founds every cell at the end",model:"2 archaea took a partner inside; at the end every cell descends from one of them",real:"All mitochondria descend from one alphaproteobacterium",pass:!0,source:"Roger, Muñoz-Gómez & Kamikawa 2017"},{id:"mtGenes",how:"emerges",what:"Genes left in the guest genome at the end",model:"50 genes, 29 of them for proteins: 0.97 % of the 3,000 protein genes it started with",real:"37 in humans (13 for proteins) up to 100 in the protist Andalucia (66 for proteins); free-living relatives have thousands",pass:!0,source:"Anderson et al. 1981; Burger et al. 2013"},{id:"which",how:"built",what:"The genes that stay are the oily core of the respiratory chain",model:"cox1 and cob kept; kept proteins have 4.5 helices in the membrane on average, moved ones 0.58",real:"cox1 and cob stay in almost every mitochondrial genome; the proteins mitochondria still make are the most membrane-bound subunits",pass:!0,source:"Björkholm et al. 2015; Johnston & Williams 2016"},{id:"noImport",how:"built",what:"Without protein import, the guest genome stops shrinking much sooner",model:"733 genes left, 15 times as many as with import",real:"Insect endosymbionts, whose hosts send in few proteins, keep about 120 to 650 genes; mitochondria keep a handful to 100",pass:!0,source:"McCutcheon & Moran 2012"},{id:"host",how:"tuned",what:"Genes in the host genome at the end",model:"16,504 genes, 4.6 times the archaeon’s",real:"Free-living protists have 6,000 to 40,000 genes (yeast about 6,000, Naegleria about 16,000); Asgard archaea about 4,000 to 5,000",pass:!0,source:"Goffeau et al. 1996; Fritz-Laylin et al. 2010; Spang et al. 2015"},{id:"size",how:"tuned",what:"How big the cells grow, compared with a bacterium",model:"10,000 µm³, 27 µm across: 10,000 times the bacterium",real:"An average protist has about 15,000 times the mass of an average bacterium (accept 1,500 to 150,000)",pass:!0,source:"Lane & Martin 2010"},{id:"perGene",how:"emerges",what:"Power per gene, compared with a bacterium",model:"8,000 times as much",real:"Four to five orders of magnitude more: 10,000 to 100,000 times as much (accept 3,000 to 300,000)",pass:!0,source:"Lane & Martin 2010",note:"Nothing aims at this number, but it rests on the cell size and genome size, which were tuned."},{id:"mitoShare",how:"tuned",what:"Share of the cell taken up by mitochondria",model:"33 %",real:"From about 8 % of a white blood cell to 22 % of a liver cell and nearly half of a heart muscle cell (accept 5 to 50 %)",pass:!0,source:"Weibel et al. 1969; David 1977"}],passed:10,total:10};var ce=.6931471805599453,gt=1.4142135623730951;function bt(s){let e=1;if(s>0)for(let t=0;t<s;t++)e*=2;else for(let t=0;t<-s;t++)e*=.5;return e}function ee(s){if(s!==s)return NaN;if(s>709)return 1/0;if(s<-745)return 0;let e=Math.round(s/ce),t=s-e*ce,n=1,o=1;for(let r=1;r<18;r++)n=n*t/r,o+=n;let a=Math.trunc(e/2);return o*bt(a)*bt(e-a)}function ae(s){if(!(s>0))return s===0?-1/0:NaN;if(s===1/0)return 1/0;let e=0,t=s;for(;t>=gt;)t*=.5,e++;for(;t<gt/2;)t*=2,e--;let n=(t-1)/(t+1),o=n*n,a=n,r=n;for(let h=3;h<40;h+=2)a*=o,r+=a/h;return 2*r+e*ce}var st=(s,e)=>s===0?0:ee(e*ae(s));function He(s){if(s===0)return 0;let e=s<0?-1:1,t=s*e,n=ee(ae(t)/3);return n=n-(n*n*n-t)/(3*n*n),n=n-(n*n*n-t)/(3*n*n),e*n}function ps(s){let e=String(s),t=2166136261;for(let n=0;n<e.length;n++)t^=e.charCodeAt(n),t=Math.imul(t,16777619);return t>>>0}var ge=class{constructor(e=1){let t=ps(e);this.a=t,this.b=(t^2654435769)>>>0,this.c=(t^608135816)>>>0,this.d=1,this.spare=null;for(let n=0;n<16;n++)this.u32()}u32(){let{a:e,b:t,c:n,d:o}=this,a=(e+t|0)+o|0;return o=o+1|0,e=t^t>>>9,t=n+(n<<3)|0,n=n<<21|n>>>11,n=n+a|0,this.a=e,this.b=t,this.c=n,this.d=o,a>>>0}float(){return this.u32()/4294967296}int(e){return Math.floor(this.float()*e)}chance(e){return this.float()<e}normal(){if(this.spare!==null){let a=this.spare;return this.spare=null,a}let e,t,n;do e=2*this.float()-1,t=2*this.float()-1,n=e*e+t*t;while(n>=1||n===0);let o=Math.sqrt(-2*ae(n)/n);return this.spare=t*o,e*o}poisson(e){if(e<=0)return 0;if(e<30){let t=ee(-e),n=0,o=this.float();for(;o>t;)n++,o*=this.float();return n}return Math.max(0,Math.round(e+Math.sqrt(e)*this.normal()))}binomial(e,t){if(e<=0||t<=0)return 0;if(t>=1)return e;if(e<=40){let a=0;for(let r=0;r<e;r++)this.float()<t&&a++;return a}let n=e*t;if(n<20||e*(1-t)<20)return t>.5?e-this.binomial(e,1-t):Math.min(e,this.poisson(n));let o=Math.sqrt(n*(1-t));return Math.max(0,Math.min(e,Math.round(n+o*this.normal())))}geometric(e){if(e<=1)return 1;let t=1/e;return 1+Math.floor(ae(1-this.float())/ae(1-t))}};var b={N:500,G:100,steps:3e3,archV:.087,symV:.03,bactV:1,maxV:1e5,minV:.02,roomMax:1,b:16e9,crep:18e4,junk:.1,m:25e7,mg:1e5,gExp:.7,vctrl:1,jS:38e8,jE:1e10,jP:4e10,vPrey:2,preyRange:.1,extraB:.2,extraN:3e3,vHalf:.5,cytoB:.15,ef:.1,syn0:.12,qOut:1,qIn:.05,nq:8,ps:54e8,corrLoss:.85,x0:0,xImport:.03,xAAC:.85,xMax:.95,vd:30,cytoD:50,endoD:50,intronCost:2e-4,intronSpread:.01,intronLoss:.002,intronMax:3,intronsPerEvent:.5,load:.12,loadFree:6e3,pCapture:4e-5,capturedGuests:2,loss:.25,uSymDel:2,symDelLen:8,lambdaT:.5,transferLen:6,importBase:.02,uDup:.6,dupLen:6,uHostDel:.2,hostDelLen:6,startExtra:0,uSize:.25,sizeStep:.15,uShare:.25,shareStep:.15},Ee={transfer:1,importEase:1,oxygen:.8,food:1,geneCost:1,capture:!0,corr:!0,importable:!0,aac:!0,phago:!0,anyImport:!1},yt={transfer:{min:0,max:5,step:.25},importEase:{min:.25,max:4,step:.25},oxygen:{min:.1,max:1,step:.05},food:{min:.25,max:4,step:.25},geneCost:{min:.25,max:4,step:.25}},Ge={real:{label:"The merger",blurb:"An archaeon takes in a bacterium, and the partnership becomes a eukaryote.",params:{}},alone:{label:"No merger",blurb:"The archaea never take a partner inside. Do they become complex on their own?",params:{capture:!1}},noImport:{label:"No protein import",blurb:"The host never finds a way to send its proteins into its guests.",params:{importable:!1}},noAAC:{label:"No ATP export",blurb:"The host never invents the ADP/ATP carrier, so it never taps its guests’ ATP directly.",params:{aac:!1}},noCoRR:{label:"No local control",blurb:"Respiration works just as well with all its genes in the host.",params:{corr:!1}},anything:{label:"Import anything",blurb:"Every guest protein and RNA can be imported, however oily, and no local control is needed.",params:{corr:!1,anyImport:!0}}};var be=[{key:"outside",label:"Living outside",need:0,about:"Swimming, sensing, a cell wall, pumps for food from the water, defences: useless inside another cell."},{key:"supply",label:"Made by the host",need:0,about:"Building blocks such as amino acids and vitamins that the host can hand over."},{key:"metab",label:"Metabolism",need:1,about:"The Krebs cycle, iron–sulfur clusters, fats: still needed inside."},{key:"genetic",label:"Genetic system",need:2,about:"Ribosomes, RNA polymerase, enzymes that copy DNA: needed only to make the guest’s own proteins."},{key:"resp",label:"Respiration",need:1,about:"The respiratory chain and ATP synthase, which make the ATP."},{key:"membrane",label:"Membranes",need:2,about:"Inserting proteins into the guest’s membranes, making its lipids."},{key:"rna",label:"RNA genes",need:2,about:"Ribosomal and transfer RNAs for the guest’s own ribosomes."}],Ae=Object.fromEntries(be.map((s,e)=>[s.key,e])),fs=[["nad1","resp",8,1],["nad2","resp",11,1],["nad3","resp",3,1],["nad4","resp",14,1],["nad4L","resp",3,1],["nad5","resp",16,1],["nad6","resp",5,1],["nad7","resp",0,0],["nad8","resp",0,0],["nad9","resp",0,0],["nad10","resp",0,0],["nad11","resp",0,0],["sdh2","resp",0,0],["sdh3","resp",3,0],["sdh4","resp",3,0],["cob","resp",8,1],["cox1","resp",12,1],["cox2","resp",2,1],["cox3","resp",7,1],["cox11","resp",1,0],["cox15","resp",8,0],["atp1","resp",0,0],["atp3","resp",0,0],["atp4","resp",1,0],["atp6","resp",5,0],["atp8","resp",1,0],["atp9","resp",2,0],["ccmA","resp",0,0],["ccmB","resp",6,0],["ccmC","resp",6,0],["ccmF","resp",13,0],["rps1","genetic",0,0],["rps2","genetic",0,0],["rps3","genetic",0,0],["rps4","genetic",0,0],["rps7","genetic",0,0],["rps8","genetic",0,0],["rps10","genetic",0,0],["rps11","genetic",0,0],["rps12","genetic",0,0],["rps13","genetic",0,0],["rps14","genetic",0,0],["rps19","genetic",0,0],["rpl1","genetic",0,0],["rpl2","genetic",0,0],["rpl5","genetic",0,0],["rpl6","genetic",0,0],["rpl10","genetic",0,0],["rpl11","genetic",0,0],["rpl14","genetic",0,0],["rpl16","genetic",0,0],["rpl18","genetic",0,0],["rpl19","genetic",0,0],["rpl20","genetic",0,0],["rpl27","genetic",0,0],["rpl31","genetic",0,0],["rpl32","genetic",0,0],["rpl34","genetic",0,0],["rpl35","genetic",0,0],["rpoA","genetic",0,0],["rpoB","genetic",0,0],["rpoC","genetic",0,0],["rpoD","genetic",0,0],["tufA","genetic",0,0],["secY","membrane",10,0],["tatA","membrane",1,0],["tatC","membrane",6,0]],gs=["A","C","D","E","F","G","H","I","K","L1","L2","M1","M2","Mf","N","P","Q","R1","R2","S1","S2","T","V","W","Y","Ile2","Gly2","Pro2"],bs=["rns","rnl","rrn5",...gs.map(s=>`trn${s}`),"rnpB","ssrA"],ys={outside:2073,supply:350,metab:250,genetic:130,resp:50,membrane:80},ws=s=>ee(-.55*s);function ks(){let s=[];for(let[t,n,o,a]of fs)s.push({name:t,kind:Ae[n],tm:o,corr:a,prot:1,op:t.replace(/[0-9A-Z]+$/,"")});for(let t of bs)s.push({name:t,kind:Ae.rna,tm:0,corr:0,prot:0,op:t.startsWith("trn")?"trn":"rrn"});let e=new ge("alphaproteobacterium");for(let[t,n]of Object.entries(ys))for(let o=0;o<n;o++){let a=0;t==="membrane"?a=e.int(7):t==="resp"&&(a=e.chance(.4)?1+e.int(4):0),s.push({name:null,kind:Ae[t],tm:a,corr:0,prot:1,op:null})}return s}var W=ks(),K=W.length,wt=Math.ceil(K/32),kt=Uint8Array.from(W,s=>s.kind),nt=Uint8Array.from(W,s=>s.prot),ot=Uint8Array.from(W,s=>s.corr),at=Uint8Array.from(W,s=>be[s.kind].need),vt=Float64Array.from(W,s=>s.prot?be[s.kind].need===0?0:ws(s.tm):s.name.startsWith("trn")?.01:0),xt=Object.fromEntries(W.filter(s=>s.name).map(s=>[s.name,W.indexOf(s)])),Le=W.filter(s=>s.prot).length,Dn=be.map((s,e)=>W.filter(t=>t.kind===e).length),vs={outside:30,supply:10,metab:4,genetic:3,resp:3,membrane:3,rna:2};function xs(){let s=new ge("chromosome"),e=[],t=new Map,n=new Map;W.forEach((o,a)=>{if(o.op&&o.op!=="trn")t.has(o.op)||(t.set(o.op,[]),e.push(t.get(o.op))),t.get(o.op).push(a);else{let r=be[o.kind].key;n.has(r)||n.set(r,[]),n.get(r).push(a)}});for(let[o,a]of n){let r=0;for(;r<a.length;){let h=s.geometric(vs[o]);e.push(a.slice(r,r+h)),r+=h}}for(let o=e.length-1;o>0;o--){let a=s.int(o+1);[e[o],e[a]]=[e[a],e[o]]}return Uint16Array.from(e.flat())}var Ve=xs(),Cn=(()=>{let s=new Uint16Array(K);return Ve.forEach((e,t)=>s[e]=t),s})(),Mt=Uint16Array.from(W.map((s,e)=>e).sort((s,e)=>W[s].kind-W[e].kind||(W[e].name?1:0)-(W[s].name?1:0)||s-e)),Be=3600,At=600,X=[{key:"import",label:"Protein import",size:30,rate:3e-4,about:"Gates in the guest’s membranes (TOM and TIM) that let proteins made by the host into the guest."},{key:"aac",label:"ATP export",size:6,rate:2e-5,about:"The ADP/ATP carrier, a host invention placed in the guest’s inner membrane: it swaps the host’s ADP for the guest’s ATP."},{key:"nucleus",label:"Nucleus",size:80,rate:.03,about:"An envelope with pores around the host’s DNA, plus the spliceosome: genes are read and their introns cut out before any ribosome sees the message."},{key:"endo",label:"Inner membranes",size:120,rate:.15,about:"The endoplasmic reticulum, Golgi and vesicles: membranes inside the cell for making, sorting and taking things in."},{key:"cyto",label:"Cytoskeleton",size:100,rate:.12,about:"Actin, tubulin and motor proteins that hold a big cell in shape, move it and carry cargo across it."},{key:"phago",label:"Phagocytosis",size:80,rate:.06,about:"Wrapping the membrane around other cells to eat them whole. Needs inner membranes and a cytoskeleton."},{key:"sex",label:"Sex",size:60,rate:.03,about:"Meiosis and cell fusion: shuffling genomes, so a big genome does not pile up broken genes."}],R=Object.fromEntries(X.map((s,e)=>[s.key,e])),L=X.length,On=X.reduce((s,e)=>s+e.size,0);var O=wt,Te=4*Math.PI;function Tt(s){return s-=s>>>1&1431655765,s=(s&858993459)+(s>>>2&858993459),Math.imul(s+(s>>>4)&252645135,16843009)>>>24}var ye=(s,e,t)=>s[e+(t>>>5)]>>>(t&31)&1,$t=(s,e,t)=>s[e+(t>>>5)]|=1<<(t&31),St=(s,e,t)=>s[e+(t>>>5)]&=~(1<<(t&31)),ze=class{constructor(e){this.vc=new Float64Array(e),this.gx=new Float64Array(e),this.ns=new Int32Array(e),this.sym=new Uint32Array(e*O),this.nuc=new Uint32Array(e*O),this.gs=new Int32Array(e),this.gsProt=new Int32Array(e),this.corrMiss=new Int32Array(e),this.arch=new Int32Array(e),this.bact=new Int32Array(e),this.junk=new Int32Array(e),this.mod=new Int32Array(e*L),this.extra=new Int32Array(e),this.introns=new Int32Array(e),this.line=new Int32Array(e),this.id=new Int32Array(e),this.from=new Int32Array(e),this.mu=new Float64Array(e),this.pw=new Float64Array(e)}},Ms=["vc","gx","ns","gs","gsProt","corrMiss","arch","bact","junk","extra","introns","line","id","mu","pw"];function As(s,e,t,n){for(let o of Ms)t[o][n]=s[o][e];t.sym.set(s.sym.subarray(e*O,e*O+O),n*O),t.nuc.set(s.nuc.subarray(e*O,e*O+O),n*O),t.mod.set(s.mod.subarray(e*L,e*L+L),n*L)}function Nt(s,e){let t=X.map((a,r)=>Math.min(1,s[r]/a.size)),n=e.importable?t[R.import]:0,o=Math.min(1,t[R.endo]/.5)*Math.min(1,t[R.cyto]/.5);return{lin:t,import:n,aac:e.aac?t[R.aac]*n:0,nucleus:t[R.nucleus],endo:t[R.endo],cyto:t[R.cyto],phago:e.phago?t[R.phago]*o:0,sex:t[R.sex]}}var Ts=st(b.symV,b.gExp),It=(s,e)=>{let t=new Float64Array(e+1);t[0]=1;for(let n=1;n<=e;n++)t[n]=t[n-1]*s;return t},$s=It(b.corrLoss,64),Ss=It(b.loss,40),Ps=X.reduce((s,e)=>s+e.rate,0);function Fe(s){let e=0;for(let t=0;t<s.length;t++)e+=s[t];return e}function Et(s,e,t,n){let o=s.vc,a=o/(o+b.vHalf),r=e.food*(1+b.extraB*ae(1+s.extra/b.extraN))*(1+b.cytoB*t.cyto*a),h=b.jS*n*r,u=b.jE*o*t.endo*a*r,m=b.jP*o*o*t.phago/(o+b.vPrey)*(1+b.preyRange*ae(1+o/b.vPrey))*r;return{surface:h,endo:u,phago:m,food:h+u+m}}function Gt(s,e){let t=He(3*s.vc/Te),{food:n}=Et(s,e,Nt(s.mod,e),Te*t*t);return(1-b.ef)*e.oxygen*n/b.ps}function Ns(s,e,t){let n=Math.max(1,Math.floor(b.roomMax*s.vc/b.symV));return Math.max(1,Math.min(n,Math.round(t*Gt(s,e))))}function Pt(s,e){let t=s.ns,n=s.vc,o=n+t*b.symV,a=He(3*n/Te),r=Te*a*a,h=Nt(s.mod,e),u=s.arch+s.bact+s.extra+Fe(s.mod),{surface:m,endo:d,phago:i,food:f}=Et(s,e,h,r),p=b.qOut+(t>0?b.qIn*Math.min(t,b.nq)/b.nq:0),l=b.syn0+(1-b.syn0)*p/(p+1),g=b.ef*f*l,w=(1-b.ef)*e.oxygen*f,y=e.corr?$s[Math.min(64,s.corrMiss)]:1,k=t>0?y*Math.min(w,t*b.ps):0,P=t>0?Math.min(b.xMax,b.x0+b.xImport*h.import+b.xAAC*h.aac):0,T=b.vd*(1+b.cytoD*h.cyto)*(1+b.endoD*h.endo),G=1/(1+o/T*(o/T)),H=Math.max(.02,1-b.intronCost*s.introns*(1-h.nucleus)),x=Math.max(.2,1-b.load*Math.max(0,u-b.loadFree)/1e4*(1-.9*h.sex)),M=G*H*x,S=1+Math.max(0,n/b.vctrl-1)*(1-h.aac),E=(u+b.junk*s.junk)*e.geneCost,N=b.mg*S*E*st(n,b.gExp),V=b.m*n+N,F=b.b*n+b.crep*S*E,j=t*(b.m*b.symV+b.mg*e.geneCost*s.gsProt*Ts),ne=t*(b.b*b.symV+b.crep*e.geneCost*s.gs),q=(g+P*k)*M,U=ce*(q-V)/F,oe=t>0?ce*((g+k)*M-V-j)/(F+ne):1/0,Me=Math.max(0,Math.min(U,oe));return{V:o,S:r,r:a,food:f,surface:m,endo:d,phago:i,syn:l,ferm:g,leftover:w,resp:k,share:P,transport:G,intron:H,load:x,ctrl:y,copies:S,genes:u,power:g+k,hostPower:q,upkeepGenes:N,upkeepHost:V,buildHost:F,upkeepSym:j,buildSym:ne,muHost:U,muAll:oe,limit:t>0&&oe<U?"all":"host",mu:Me,fx:h}}function Is(s){let e=b.bactV,t=He(3*e/Te),n=Te*t*t,o=s.food*b.jS*n,a=(b.ef+(1-b.ef)*s.oxygen)*o,r=K;return{V:e,power:a,genes:r,perGene:a/r}}var $e=class{constructor({seed:e="eve",scenario:t="real",params:n={}}={}){this.seed=String(e),this.scenario=Ge[t]?t:"real",this.params={...Ee,...Ge[this.scenario].params,...n},this.rng=new ge(`${this.seed}/${this.scenario}`),this.N=b.N,this.A=new ze(this.N),this.B=new ze(this.N),this.step=0,this.history=[],this.log=[],this.marks={},this.nextId=1,this.lines=0,this.captures=0,this.lost=0,this.transfers=0,this.shown=[],this.events=[];let o=this.A;for(let a=0;a<this.N;a++)o.vc[a]=b.archV,o.arch[a]=Be,o.extra[a]=this.rng.poisson(b.startExtra),o.id[a]=this.nextId++,o.from[a]=a;this.assessAll(o),this.record()}get done(){return this.step>=b.steps}get generations(){return this.step*b.G}setParams(e){for(let[t,n]of Object.entries(e??{}))t in Ee&&(this.params[t]=n);this.assessAll(this.A),this.history.length&&(this.history[this.history.length-1]=this.summary())}cellView(e,t){return{vc:e.vc[t],ns:e.ns[t],gs:e.gs[t],gsProt:e.gsProt[t],corrMiss:e.corrMiss[t],arch:e.arch[t],bact:e.bact[t],junk:e.junk[t],extra:e.extra[t],introns:e.introns[t],mod:e.mod.subarray(t*L,t*L+L)}}assessAll(e){for(let t=0;t<this.N;t++){let n=Pt(this.cellView(e,t),this.params);e.mu[t]=n.mu,e.pw[t]=n.power}}run(e=1){for(let t=0;t<e&&!this.done;t++)this.advance()}advance(){let{rng:e,N:t}=this,n=this.A,o=this.B;this.events=[];let a=0;for(let i=0;i<t;i++)a+=n.mu[i];a/=t;let r=new Float64Array(t),h=0;for(let i=0;i<t;i++){let f=a>0&&n.mu[i]>0?Math.max(-60,Math.min(60,ce*b.G*(n.mu[i]-a)/a)):-60;r[i]=n.mu[i]>0||a<=0?ee(f):0,h+=r[i]}if(!(h>0)){for(let i=0;i<t;i++)r[i]=1;h=t}let u=new Float64Array(t),m=0;for(let i=0;i<t;i++)m+=r[i],u[i]=m;let d=new Int32Array(t).fill(-1);for(let i=0;i<t;i++){let f=e.float()*h,p=0,l=t-1;for(;p<l;){let g=p+l>>1;u[g]>f?l=g:p=g+1}As(n,p,o,i),o.from[i]=p,d[p]<0?d[p]=i:o.id[i]=this.nextId++}this.step++;for(let i=0;i<t;i++)this.mutate(o,i);this.A=o,this.B=n,this.assessAll(o),this.record()}mutate(e,t){let{rng:n}=this,o=this.params;if(n.chance(b.uSize)&&(e.vc[t]=Math.min(b.maxV,Math.max(b.minV,e.vc[t]*ee(b.sizeStep*n.normal())))),e.ns[t]>0){n.chance(b.uShare)&&(e.gx[t]=Math.min(100,Math.max(.02,e.gx[t]*ee(b.shareStep*n.normal()))));let m=Ns(this.cellView(e,t),o,e.gx[t]);e.ns[t]=m;let d=o.importable?Math.min(1,e.mod[t*L+R.import]/X[R.import].size):0;if(m<=40&&n.chance(Ss[m]*(1-.95*d)))this.loseGuests(e,t);else{let i=n.poisson(b.uSymDel);for(let p=0;p<i&&e.gs[t]>0;p++)this.symDeletion(e,t);let f=n.poisson(b.lambdaT*o.transfer*m/(m+3));for(let p=0;p<f&&e.gs[t]>0;p++)this.integrate(e,t)}}else if(o.capture){let m=n.binomial(3,.3333333333333333);m>0&&n.chance(b.pCapture*m)&&this.capture(e,t)}let a=n.poisson(b.uDup);for(let m=0;m<a;m++)this.duplicate(e,t);let r=n.poisson(Ps);for(let m=0;m<r;m++)this.innovate(e,t);let h=n.poisson(b.uHostDel);for(let m=0;m<h;m++)this.hostDeletion(e,t);let u=e.introns[t];if(u>0){let m=e.arch[t]+e.bact[t]+e.extra[t]+Fe(e.mod.subarray(t*L,t*L+L)),d=Math.max(0,1-u/(b.intronMax*m));e.introns[t]=Math.max(0,u+n.poisson(u*b.intronSpread*d)-n.binomial(u,b.intronLoss))}}capture(e,t){let n=t*O;for(let o=0;o<O;o++)e.sym[n+o]=0;for(let o=0;o<K;o++)$t(e.sym,n,o);e.ns[t]=b.capturedGuests,e.gx[t]=b.capturedGuests/Gt(this.cellView(e,t),this.params),e.gs[t]=K,e.gsProt[t]=Le,e.corrMiss[t]=0,e.line[t]=++this.lines,this.captures++,this.events.push({kind:"capture",id:e.id[t]})}loseGuests(e,t){e.ns[t]=0,e.gx[t]=0,e.gs[t]=0,e.gsProt[t]=0,e.corrMiss[t]=0,e.line[t]=0,e.sym.fill(0,t*O,t*O+O),this.lost++,this.events.push({kind:"lose",id:e.id[t]})}symDeletion(e,t){let{rng:n}=this,o=t*O,a=n.geometric(b.symDelLen),r=n.int(K),h=[];for(let l=0;l<K&&h.length<a;l++){let g=Ve[(r+l)%K];ye(e.sym,o,g)&&h.push(g)}if(!h.length)return;let u=0;for(let l of h)u+=nt[l];let m=e.gsProt[t]-u,d=0;for(let l of h){if(!ye(e.nuc,o,l)){let g=at[l];if(g===1||g===2&&m>0)return}d+=ot[l]}let i=this.params,f=.5*h.length/Math.max(1,e.gs[t])-(i.corr?.2*d:0),p=f>0?Math.min(1,.5+10*f):.005;if(n.chance(p)){for(let l of h)St(e.sym,o,l),e.gs[t]--,e.gsProt[t]-=nt[l],ot[l]&&e.corrMiss[t]++;if(e.gsProt[t]===0&&e.gs[t]>0){for(let l=0;l<K;l++)ye(e.sym,o,l)&&St(e.sym,o,l);e.gs[t]=0}this.events.push({kind:"shrink",id:e.id[t],n:h.length})}}integrate(e,t){let{rng:n}=this,o=this.params,a=t*O,r=n.geometric(b.transferLen),h=n.int(K),u=o.importable?Math.min(1,e.mod[t*L+R.import]/X[R.import].size):0,m=o.importable?Math.min(1,(b.importBase+(1-b.importBase)*u)*o.importEase):0,d=0,i=0;for(let f=0;f<K&&d<r;f++){let p=Ve[(h+f)%K];if(!ye(e.sym,a,p)||(d++,ye(e.nuc,a,p)))continue;let l=o.anyImport?at[p]?1:0:vt[p];if(l>0&&n.chance(Math.min(1,l*m))){$t(e.nuc,a,p),e.bact[t]++,i++,this.transfers++;let g=kt[p];(g===Ae.metab||g===Ae.membrane)&&e.arch[t]>Be-At&&n.chance(.5)&&e.arch[t]--}else e.junk[t]++}e.introns[t]+=n.poisson(b.intronsPerEvent),this.events.push({kind:"transfer",id:e.id[t],n:d,worked:i})}duplicate(e,t){e.extra[t]+=this.rng.geometric(b.dupLen)}innovate(e,t){let{rng:n}=this,o=this.params,a=t*L,r=0,h=X.map((d,i)=>{let p=!(i===R.import&&!o.importable)&&!(i===R.aac&&!o.aac)&&!(i===R.phago&&!o.phago)&&e.mod[a+i]<d.size?d.rate:0;return r+=p,p});if(!(r>0))return;let u=n.float()*r,m=0;for(;m<L-1&&u>=h[m];)u-=h[m++];e.mod[a+m]++}hostDeletion(e,t){let{rng:n}=this,o=n.geometric(b.hostDelLen),a=t*L,r=t*O,h=0;for(let u=0;u<O;u++)h+=Tt(e.nuc[r+u]&e.sym[r+u]);for(let u=0;u<o;u++){let m=0;for(let p=0;p<L;p++)m+=e.mod[a+p];let d=[e.extra[t],m,h,e.junk[t]],i=d[0]+d[1]+d[2]+d[3];if(i<=0)return;let f=n.float()*i;if(f<d[0])e.extra[t]--;else if((f-=d[0])<d[1]){let p=f;for(let l=0;l<L;l++){if(p<e.mod[a+l]){e.mod[a+l]--;break}p-=e.mod[a+l]}}else if((f-=d[1])<d[2]){let p=Math.floor(f);for(let l=0;l<O;l++){let g=e.nuc[r+l]&e.sym[r+l],w=Tt(g);if(p<w){for(let y=0;y<32;y++)if(g>>>y&1){if(p===0){e.nuc[r+l]&=~(1<<y);break}p--}break}p-=w}e.bact[t]--,h--}else e.junk[t]--}}inject(e){let{rng:t}=this,n=this.A,o=a=>this.log.push({step:this.step,kind:"lab",text:a});switch(e){case"capture":{let a=[];for(let h=0;h<this.N;h++)n.ns[h]===0&&a.push(h);if(!a.length){o("Every cell already has guests.");break}let r=a[t.int(a.length)];this.capture(n,r),o("You put a bacterium inside an archaeon.");break}case"spill":{let a=0;for(let r=0;r<this.N;r++)if(n.ns[r]>0){for(let h=0;h<10&&n.gs[r]>0;h++)this.integrate(n,r);a++}o(a?"Guests burst and spilled their DNA into every host.":"No cell has guests yet.");break}case"aac":{if(!this.params.aac){o("The ADP/ATP carrier is switched off in this experiment.");break}for(let a=0;a<this.N;a++)n.mod[a*L+R.aac]=X[R.aac].size;o("Every cell now has the genes for the ADP/ATP carrier. It works only where the host can import proteins into its guests.");break}case"cure":{let a=0;for(let r=0;r<this.N;r++)n.ns[r]>0&&t.chance(.5)&&(this.loseGuests(n,r),a++);o(a?`Half the cells lost all their guests (${a} cells).`:"No cell has guests to lose.");break}default:return}this.assessAll(n),this.history.length&&(this.history[this.history.length-1]=this.summary())}typical(){let e=this.A,t=[],n=[];for(let a=0;a<this.N;a++)(e.ns[a]>0?t:n).push(a);if(t.length>this.N*.05)return t.sort((a,r)=>e.gs[a]-e.gs[r]||e.id[a]-e.id[r]),t[t.length>>1];let o=a=>e.extra[a]+e.bact[a]+Fe(e.mod.subarray(a*L,a*L+L));return n.sort((a,r)=>o(a)-o(r)||e.id[a]-e.id[r]),n[n.length>>1]}summary(){let e=this.A,t=this.params,n=0,o=0,a=new Set;for(let i=0;i<this.N;i++)e.ns[i]>0&&n++,e.line[i]&&a.add(e.line[i]),o+=e.mu[i];let r=this.typical(),h=this.cellView(e,r),u=Pt(h,t),m=Is(t),d=u.fx.lin;return{step:this.step,gen:this.step*b.G,share:n/this.N,mu:o/this.N,ns:h.ns,gs:h.gs,gsProt:h.gsProt,gh:u.genes,arch:h.arch,bact:h.bact,extra:h.extra,junk:h.junk,introns:h.introns,modGenes:Fe(h.mod),V:u.V,vc:h.vc,power:u.power,hostPower:u.hostPower,food:u.food,foodSurface:u.surface,foodEndo:u.endo,foodPhago:u.phago,ferm:u.ferm,resp:u.resp,upkeepHost:u.upkeepHost,upkeepGenes:u.upkeepGenes,upkeepSym:u.upkeepSym,buildHost:u.buildHost,buildSym:u.buildSym,copies:u.copies,transport:u.transport,intronEff:u.intron,loadEff:u.load,perGene:u.power/u.genes,perGeneRel:u.power/u.genes/m.perGene,doubling:u.mu>0?ce/u.mu:1/0,atpShare:u.share,limit:u.limit,mods:d.map(i=>Math.round(i*1e3)/1e3),lines:a.size,line:e.line[r],captures:this.captures,transfers:this.transfers,lost:this.lost}}record(){let e=this.summary();this.history.push(e),this.notes(e)}notes(e){let t=this.marks,n=(r,h,u)=>{t[r]||(t[r]=this.step,this.log.push({step:this.step,kind:h,text:u}))},o=r=>Math.round(r).toLocaleString("en-US");for(let r of this.events)r.kind==="capture"&&n("firstCapture","merger","An archaeon has closed its protrusions around a bacterium: a cell inside a cell."),r.kind==="lose"&&t.firstCapture&&n("firstLoss","merger","A cell has lost its guests: none of them was passed on when it divided, so its daughter is a plain archaeon again.");let a=e.share>.5;a&&n("sweep","merger","Cells with guests inside now outnumber plain archaea."),a&&(e.mods[R.import]>=.999&&n("import","host","The host can now send its own proteins into its guests."),e.gs<1500&&n("outside","genes",`The guests have lost most of the genes they needed to live outside: ${o(e.gs)} genes left.`),e.atpShare>.5&&n("aac","host","The ADP/ATP carrier: the guests now hand over most of their ATP. They have become mitochondria."),e.gs<700&&n("g700","genes",`The guest genome is down to ${o(e.gs)} genes, as small as that of an insect endosymbiont like Buchnera.`),e.gh>6e3&&n("g6000","host","The host genome has passed 6,000 genes: more than almost any archaeon has."),e.gs<200&&n("g200","genes",`Only ${o(e.gs)} genes are left in the guest genome; the host makes nearly everything its guests need.`),e.mods[R.nucleus]>=.999&&n("nucleus","host","A nucleus now encloses the host genome."),e.mods[R.endo]>=.999&&n("endo","host","A full set of inner membranes: endoplasmic reticulum, Golgi and vesicles."),e.mods[R.cyto]>=.999&&n("cyto","host","A full cytoskeleton: the cell can grow large and move cargo across itself."),e.mods[R.phago]>=.999&&n("phago","host","Phagocytosis: the cell eats bacteria whole."),e.mods[R.sex]>=.999&&n("sex","host","Sex: meiosis and cell fusion shuffle the genome."),e.V>1e3&&n("big","cell","The typical cell is now more than 1,000 µm³: a thousand times a bacterium."),e.gs>0&&e.gs<100&&n("g100","genes",`The guest genome is down to ${o(e.gs)} genes, in the range of real mitochondrial genomes.`))}genome(){let e=this.A,t=this.typical(),n=t*O,o=[],a=[];for(let r=0;r<K;r++)ye(e.sym,n,r)?o.push(r):ye(e.nuc,n,r)&&a.push(r);return{kept:o,moved:a,ns:e.ns[t]}}frame(e=30){let t=this.A,n=new Map;for(let l=0;l<this.N;l++)n.has(t.id[l])||n.set(t.id[l],l);let o=this.shown.filter(l=>n.has(l)),a=new Set(o),r=0;for(let l=0;l<this.N;l++)t.ns[l]>0&&r++;let h=Math.round(e*r/this.N),u=o.filter(l=>t.ns[n.get(l)]>0).length;for(let l of this.events)l.kind==="capture"&&n.has(l.id)&&!a.has(l.id)&&a.size<e+4&&(a.add(l.id),o.push(l.id),u++);let m=[];for(let l=0;l<this.N;l++)m.push(l);let d=this.step*2654435761>>>0;for(let l=m.length-1;l>0;l--){d=Math.imul(d^d>>>15,2246822519)+3266489917>>>0;let g=d%(l+1);[m[l],m[g]]=[m[g],m[l]]}for(let l of m){if(o.length>=e)break;let g=t.id[l];if(a.has(g))continue;let w=t.ns[l]>0;w&&u>=Math.max(h,r?1:0)||!w&&o.length-u>=e-h||(a.add(g),o.push(g),w&&u++)}this.shown=o;let i=o.map(l=>{let g=n.get(l);return{id:l,V:t.vc[g]+t.ns[g]*b.symV,vc:t.vc[g],ns:t.ns[g],gs:t.gs[g],line:t.line[g],mods:X.map((w,y)=>Math.min(1,t.mod[g*L+y]/w.size)),mu:t.mu[g]}}),f=this.typical(),p=f*O;return{step:this.step,gen:this.step*b.G,done:this.done,cells:i,typical:{id:t.id[f],sym:Array.from(t.sym.subarray(p,p+O)),nuc:Array.from(t.nuc.subarray(p,p+O)),mods:Array.from(t.mod.subarray(f*L,f*L+L))},events:this.events.slice(0,40)}}geometry(){return{genes:W.map(e=>[e.name,e.kind,e.tm,e.corr,e.prot]),display:Array.from(Mt),kinds:be.map(e=>({key:e.key,label:e.label,about:e.about})),modules:X.map(e=>({key:e.key,label:e.label,size:e.size,about:e.about})),hostGenes:Be,N:this.N,G:b.G,steps:b.steps,archV:b.archV,symV:b.symV,bactV:b.bactV}}};var Lt=[2,6,20,1e3];function Rt(s){let e=null,t=null,n=!1,o=2,a=null,r=0,h=0,u=()=>{let f=e.history,p=f.slice(r);r=f.length;let l=e.log.slice(h);h=e.log.length,s({type:"tick",frame:e.frame(),points:p,notes:l,params:e.params,running:n,genome:e.done?e.genome():null})},m=()=>{n=!1,a=null,t&&clearTimeout(t),t=null},d=()=>{if(t=null,!n)return;let f=Lt[o]??Lt[2],p=24,l=Date.now(),g=Math.max(1,Math.round(f/20)),w=0;for(;!e.done&&(w<g||f>=1e3&&Date.now()-l<p)&&!(a!==null&&e.step>=a||(e.run(1),w++,Date.now()-l>p*2)););let y=a!==null&&e.step>=a;(e.done||y)&&(n=!1,a=null),u();let k=f>=1e3?0:Math.max(0,1e3*Math.max(w,1)/f-(Date.now()-l));n?t=setTimeout(d,k):s({type:"paused",step:e.step,done:e.done})},i=()=>{e.done||(n=!0,t||(t=setTimeout(d,0)))};return function(p){try{switch(p.type){case"init":{m(),e=new $e({seed:p.seed,scenario:p.scenario,params:p.params??{}}),r=0,h=0,s({type:"ready",geometry:e.geometry(),seed:e.seed,scenario:e.scenario,scenarios:Ge,defaults:Ee,ranges:yt,steps:b.steps,G:b.G}),u();break}case"play":if(!e)break;typeof p.speed=="number"&&(o=p.speed),a=null,i();break;case"speed":o=p.speed;break;case"pause":m(),e&&s({type:"paused",step:e.step,done:e.done});break;case"runTo":if(!e)break;if(typeof p.speed=="number"&&(o=p.speed),e.step>=p.step){m(),s({type:"paused",step:e.step,done:e.done});break}a=p.step,i();break;case"step":if(!e)break;m(),e.run(p.n??1),u(),s({type:"paused",step:e.step,done:e.done});break;case"inject":if(!e)break;e.inject(p.kind),u();break;case"set":if(!e)break;e.setParams(p.patch),u();break;default:break}}catch(l){m(),s({type:"error",message:String(l&&l.stack?l.stack:l)})}}}var Es=()=>new Promise(s=>setTimeout(s,0)),je=["real","alone","noImport"];async function rt(s,{seed:e="eve"}={}){let t=je.length*b.steps,n={},o=Date.now();for(let a=0;a<je.length;a++){let r=new $e({seed:e,scenario:je[a]});for(;!r.done;)r.run(1),Date.now()-o>40&&(s&&s({step:a*b.steps+r.step,total:t}),await Es(),o=Date.now());n[je[a]]={last:r.history[r.history.length-1],genome:r.genome()}}return it(n.real,{alone:n.alone.last,noImport:n.noImport.last})}var de=s=>Math.round(s).toLocaleString("en-US"),Y=s=>Number(s.toPrecision(2)).toLocaleString("en-US"),Dt=s=>Math.cbrt(6*s/Math.PI),Gs=s=>s>=1?`${Y(s)} days`:`${Y(s*24)} hours`;function Ct(s){let e=s.filter(t=>W[t].prot);return e.reduce((t,n)=>t+W[n].tm,0)/Math.max(1,e.length)}function it(s,e=null){let t=s.last,n=s.genome,o=new Set(n.kept),a=Ct(n.kept),r=Ct(n.moved),h=t.gsProt/Le,u=t.ns*b.symV/t.V,m=[];if(e){let f=e.alone,p=Dt(f.V);m.push({id:"asgard",how:"tuned",what:"An archaeon on its own: its size and how fast it divides",model:`${Y(p)} µm across, divides every ${Gs(f.doubling)}`,real:"The Asgard archaeon grown by Imachi and colleagues: 0.3 to 0.75 µm across, divides every 14 to 25 days",pass:p>=.3&&p<=.75&&f.doubling>=14&&f.doubling<=25,source:"Imachi et al. 2020"});let l=f.mods.filter(g=>g>=.999).length;m.push({id:"alone",how:"emerges",what:"Without the merger, archaea stay small and simple",model:`after ${de(b.steps*b.G)} generations: ${de(f.gh)} genes, ${Y(f.V)} µm³, ${l?`${l} eukaryotic features`:"no eukaryotic feature complete"}`,real:"No archaeon or bacterium has a nucleus, an inner membrane system and phagocytosis; Asgard archaea carry only some of the genes for them",pass:l===0&&f.gh<5e3&&f.V<1,source:"Imachi et al. 2020; Lane & Martin 2010"})}m.push({id:"once",how:"emerges",what:"One merger founds every cell at the end",model:`${de(t.captures)} archaea took a partner inside; at the end every cell descends from ${t.lines===1?"one of them":`${t.lines} of them`}`,real:"All mitochondria descend from one alphaproteobacterium",pass:t.lines===1,source:"Roger, Muñoz-Gómez & Kamikawa 2017"}),m.push({id:"mtGenes",how:"emerges",what:"Genes left in the guest genome at the end",model:`${de(t.gs)} genes, ${de(t.gsProt)} of them for proteins: ${Y(h*100)} % of the ${de(Le)} protein genes it started with`,real:"37 in humans (13 for proteins) up to 100 in the protist Andalucia (66 for proteins); free-living relatives have thousands",pass:t.gs>=5&&t.gs<=110&&h>=.002&&h<=.03,source:"Anderson et al. 1981; Burger et al. 2013"});let d=["cox1","cob"].filter(f=>o.has(xt[f]));if(m.push({id:"which",how:"built",what:"The genes that stay are the oily core of the respiratory chain",model:`${d.length===2?"cox1 and cob kept":d.length?`only ${d[0]} kept`:"cox1 and cob lost"}; kept proteins have ${Y(a)} helices in the membrane on average, moved ones ${Y(r)}`,real:"cox1 and cob stay in almost every mitochondrial genome; the proteins mitochondria still make are the most membrane-bound subunits",pass:d.length===2&&a>2*r,source:"Björkholm et al. 2015; Johnston & Williams 2016"}),e){let f=e.noImport.gs;m.push({id:"noImport",how:"built",what:"Without protein import, the guest genome stops shrinking much sooner",model:`${de(f)} genes left, ${Y(f/Math.max(1,t.gs))} times as many as with import`,real:"Insect endosymbionts, whose hosts send in few proteins, keep about 120 to 650 genes; mitochondria keep a handful to 100",pass:f>=300&&f>=5*t.gs,source:"McCutcheon & Moran 2012"})}m.push({id:"host",how:"tuned",what:"Genes in the host genome at the end",model:`${de(t.gh)} genes, ${Y(t.gh/3600)} times the archaeon’s`,real:"Free-living protists have 6,000 to 40,000 genes (yeast about 6,000, Naegleria about 16,000); Asgard archaea about 4,000 to 5,000",pass:t.gh>=6e3&&t.gh<=4e4,source:"Goffeau et al. 1996; Fritz-Laylin et al. 2010; Spang et al. 2015"});let i=t.V/b.bactV;return m.push({id:"size",how:"tuned",what:"How big the cells grow, compared with a bacterium",model:`${Y(t.V)} µm³, ${Y(Dt(t.V))} µm across: ${Y(i)} times the bacterium`,real:"An average protist has about 15,000 times the mass of an average bacterium (accept 1,500 to 150,000)",pass:i>=1500&&i<=15e4,source:"Lane & Martin 2010"}),m.push({id:"perGene",how:"emerges",what:"Power per gene, compared with a bacterium",model:`${Y(t.perGeneRel)} times as much`,real:"Four to five orders of magnitude more: 10,000 to 100,000 times as much (accept 3,000 to 300,000)",pass:t.perGeneRel>=3e3&&t.perGeneRel<=3e5,source:"Lane & Martin 2010",note:"Nothing aims at this number, but it rests on the cell size and genome size, which were tuned."}),m.push({id:"mitoShare",how:"tuned",what:"Share of the cell taken up by mitochondria",model:`${Y(u*100)} %`,real:"From about 8 % of a white blood cell to 22 % of a liver cell and nearly half of a heart muscle cell (accept 5 to 50 %)",pass:u>=.05&&u<=.5,source:"Weibel et al. 1969; David 1977"}),{checks:m,passed:m.filter(f=>f.pass).length,total:m.length}}var Ot='(()=>{var D=.6931471805599453,ue=1.4142135623730951;function pe(o){let e=1;if(o>0)for(let t=0;t<o;t++)e*=2;else for(let t=0;t<-o;t++)e*=.5;return e}function N(o){if(o!==o)return NaN;if(o>709)return 1/0;if(o<-745)return 0;let e=Math.round(o/D),t=o-e*D,s=1,n=1;for(let a=1;a<18;a++)s=s*t/a,n+=s;let r=Math.trunc(e/2);return n*pe(r)*pe(e-r)}function E(o){if(!(o>0))return o===0?-1/0:NaN;if(o===1/0)return 1/0;let e=0,t=o;for(;t>=ue;)t*=.5,e++;for(;t<ue/2;)t*=2,e--;let s=(t-1)/(t+1),n=s*s,r=s,a=s;for(let l=3;l<40;l+=2)r*=n,a+=r/l;return 2*a+e*D}var Q=(o,e)=>o===0?0:N(e*E(o));function j(o){if(o===0)return 0;let e=o<0?-1:1,t=o*e,s=N(E(t)/3);return s=s-(s*s*s-t)/(3*s*s),s=s-(s*s*s-t)/(3*s*s),e*s}function Le(o){let e=String(o),t=2166136261;for(let s=0;s<e.length;s++)t^=e.charCodeAt(s),t=Math.imul(t,16777619);return t>>>0}var G=class{constructor(e=1){let t=Le(e);this.a=t,this.b=(t^2654435769)>>>0,this.c=(t^608135816)>>>0,this.d=1,this.spare=null;for(let s=0;s<16;s++)this.u32()}u32(){let{a:e,b:t,c:s,d:n}=this,r=(e+t|0)+n|0;return n=n+1|0,e=t^t>>>9,t=s+(s<<3)|0,s=s<<21|s>>>11,s=s+r|0,this.a=e,this.b=t,this.c=s,this.d=n,r>>>0}float(){return this.u32()/4294967296}int(e){return Math.floor(this.float()*e)}chance(e){return this.float()<e}normal(){if(this.spare!==null){let r=this.spare;return this.spare=null,r}let e,t,s;do e=2*this.float()-1,t=2*this.float()-1,s=e*e+t*t;while(s>=1||s===0);let n=Math.sqrt(-2*E(s)/s);return this.spare=t*n,e*n}poisson(e){if(e<=0)return 0;if(e<30){let t=N(-e),s=0,n=this.float();for(;n>t;)s++,n*=this.float();return s}return Math.max(0,Math.round(e+Math.sqrt(e)*this.normal()))}binomial(e,t){if(e<=0||t<=0)return 0;if(t>=1)return e;if(e<=40){let r=0;for(let a=0;a<e;a++)this.float()<t&&r++;return r}let s=e*t;if(s<20||e*(1-t)<20)return t>.5?e-this.binomial(e,1-t):Math.min(e,this.poisson(s));let n=Math.sqrt(s*(1-t));return Math.max(0,Math.min(e,Math.round(s+n*this.normal())))}geometric(e){if(e<=1)return 1;let t=1/e;return 1+Math.floor(E(1-this.float())/E(1-t))}};var i={N:500,G:100,steps:3e3,archV:.087,symV:.03,bactV:1,maxV:1e5,minV:.02,roomMax:1,b:16e9,crep:18e4,junk:.1,m:25e7,mg:1e5,gExp:.7,vctrl:1,jS:38e8,jE:1e10,jP:4e10,vPrey:2,preyRange:.1,extraB:.2,extraN:3e3,vHalf:.5,cytoB:.15,ef:.1,syn0:.12,qOut:1,qIn:.05,nq:8,ps:54e8,corrLoss:.85,x0:0,xImport:.03,xAAC:.85,xMax:.95,vd:30,cytoD:50,endoD:50,intronCost:2e-4,intronSpread:.01,intronLoss:.002,intronMax:3,intronsPerEvent:.5,load:.12,loadFree:6e3,pCapture:4e-5,capturedGuests:2,loss:.25,uSymDel:2,symDelLen:8,lambdaT:.5,transferLen:6,importBase:.02,uDup:.6,dupLen:6,uHostDel:.2,hostDelLen:6,startExtra:0,uSize:.25,sizeStep:.15,uShare:.25,shareStep:.15},$={transfer:1,importEase:1,oxygen:.8,food:1,geneCost:1,capture:!0,corr:!0,importable:!0,aac:!0,phago:!0,anyImport:!1},de={transfer:{min:0,max:5,step:.25},importEase:{min:.25,max:4,step:.25},oxygen:{min:.1,max:1,step:.05},food:{min:.25,max:4,step:.25},geneCost:{min:.25,max:4,step:.25}},C={real:{label:"The merger",blurb:"An archaeon takes in a bacterium, and the partnership becomes a eukaryote.",params:{}},alone:{label:"No merger",blurb:"The archaea never take a partner inside. Do they become complex on their own?",params:{capture:!1}},noImport:{label:"No protein import",blurb:"The host never finds a way to send its proteins into its guests.",params:{importable:!1}},noAAC:{label:"No ATP export",blurb:"The host never invents the ADP/ATP carrier, so it never taps its guests’ ATP directly.",params:{aac:!1}},noCoRR:{label:"No local control",blurb:"Respiration works just as well with all its genes in the host.",params:{corr:!1}},anything:{label:"Import anything",blurb:"Every guest protein and RNA can be imported, however oily, and no local control is needed.",params:{corr:!1,anyImport:!0}}};var P=[{key:"outside",label:"Living outside",need:0,about:"Swimming, sensing, a cell wall, pumps for food from the water, defences: useless inside another cell."},{key:"supply",label:"Made by the host",need:0,about:"Building blocks such as amino acids and vitamins that the host can hand over."},{key:"metab",label:"Metabolism",need:1,about:"The Krebs cycle, iron–sulfur clusters, fats: still needed inside."},{key:"genetic",label:"Genetic system",need:2,about:"Ribosomes, RNA polymerase, enzymes that copy DNA: needed only to make the guest’s own proteins."},{key:"resp",label:"Respiration",need:1,about:"The respiratory chain and ATP synthase, which make the ATP."},{key:"membrane",label:"Membranes",need:2,about:"Inserting proteins into the guest’s membranes, making its lipids."},{key:"rna",label:"RNA genes",need:2,about:"Ribosomal and transfer RNAs for the guest’s own ribosomes."}],O=Object.fromEntries(P.map((o,e)=>[o.key,e])),Ve=[["nad1","resp",8,1],["nad2","resp",11,1],["nad3","resp",3,1],["nad4","resp",14,1],["nad4L","resp",3,1],["nad5","resp",16,1],["nad6","resp",5,1],["nad7","resp",0,0],["nad8","resp",0,0],["nad9","resp",0,0],["nad10","resp",0,0],["nad11","resp",0,0],["sdh2","resp",0,0],["sdh3","resp",3,0],["sdh4","resp",3,0],["cob","resp",8,1],["cox1","resp",12,1],["cox2","resp",2,1],["cox3","resp",7,1],["cox11","resp",1,0],["cox15","resp",8,0],["atp1","resp",0,0],["atp3","resp",0,0],["atp4","resp",1,0],["atp6","resp",5,0],["atp8","resp",1,0],["atp9","resp",2,0],["ccmA","resp",0,0],["ccmB","resp",6,0],["ccmC","resp",6,0],["ccmF","resp",13,0],["rps1","genetic",0,0],["rps2","genetic",0,0],["rps3","genetic",0,0],["rps4","genetic",0,0],["rps7","genetic",0,0],["rps8","genetic",0,0],["rps10","genetic",0,0],["rps11","genetic",0,0],["rps12","genetic",0,0],["rps13","genetic",0,0],["rps14","genetic",0,0],["rps19","genetic",0,0],["rpl1","genetic",0,0],["rpl2","genetic",0,0],["rpl5","genetic",0,0],["rpl6","genetic",0,0],["rpl10","genetic",0,0],["rpl11","genetic",0,0],["rpl14","genetic",0,0],["rpl16","genetic",0,0],["rpl18","genetic",0,0],["rpl19","genetic",0,0],["rpl20","genetic",0,0],["rpl27","genetic",0,0],["rpl31","genetic",0,0],["rpl32","genetic",0,0],["rpl34","genetic",0,0],["rpl35","genetic",0,0],["rpoA","genetic",0,0],["rpoB","genetic",0,0],["rpoC","genetic",0,0],["rpoD","genetic",0,0],["tufA","genetic",0,0],["secY","membrane",10,0],["tatA","membrane",1,0],["tatC","membrane",6,0]],$e=["A","C","D","E","F","G","H","I","K","L1","L2","M1","M2","Mf","N","P","Q","R1","R2","S1","S2","T","V","W","Y","Ile2","Gly2","Pro2"],Ce=["rns","rnl","rrn5",...$e.map(o=>`trn${o}`),"rnpB","ssrA"],ze={outside:2073,supply:350,metab:250,genetic:130,resp:50,membrane:80},je=o=>N(-.55*o);function _e(){let o=[];for(let[t,s,n,r]of Ve)o.push({name:t,kind:O[s],tm:n,corr:r,prot:1,op:t.replace(/[0-9A-Z]+$/,"")});for(let t of Ce)o.push({name:t,kind:O.rna,tm:0,corr:0,prot:0,op:t.startsWith("trn")?"trn":"rrn"});let e=new G("alphaproteobacterium");for(let[t,s]of Object.entries(ze))for(let n=0;n<s;n++){let r=0;t==="membrane"?r=e.int(7):t==="resp"&&(r=e.chance(.4)?1+e.int(4):0),o.push({name:null,kind:O[t],tm:r,corr:0,prot:1,op:null})}return o}var k=_e(),A=k.length,fe=Math.ceil(A/32),ge=Uint8Array.from(k,o=>o.kind),J=Uint8Array.from(k,o=>o.prot),Z=Uint8Array.from(k,o=>o.corr),ee=Uint8Array.from(k,o=>P[o.kind].need),ye=Float64Array.from(k,o=>o.prot?P[o.kind].need===0?0:je(o.tm):o.name.startsWith("trn")?.01:0),be=Object.fromEntries(k.filter(o=>o.name).map(o=>[o.name,k.indexOf(o)])),z=k.filter(o=>o.prot).length,ct=P.map((o,e)=>k.filter(t=>t.kind===e).length),Be={outside:30,supply:10,metab:4,genetic:3,resp:3,membrane:3,rna:2};function Ue(){let o=new G("chromosome"),e=[],t=new Map,s=new Map;k.forEach((n,r)=>{if(n.op&&n.op!=="trn")t.has(n.op)||(t.set(n.op,[]),e.push(t.get(n.op))),t.get(n.op).push(r);else{let a=P[n.kind].key;s.has(a)||s.set(a,[]),s.get(a).push(r)}});for(let[n,r]of s){let a=0;for(;a<r.length;){let l=o.geometric(Be[n]);e.push(r.slice(a,a+l)),a+=l}}for(let n=e.length-1;n>0;n--){let r=o.int(n+1);[e[n],e[r]]=[e[r],e[n]]}return Uint16Array.from(e.flat())}var _=Ue(),lt=(()=>{let o=new Uint16Array(A);return _.forEach((e,t)=>o[e]=t),o})(),we=Uint16Array.from(k.map((o,e)=>e).sort((o,e)=>k[o].kind-k[e].kind||(k[e].name?1:0)-(k[o].name?1:0)||o-e)),B=3600,ke=600,v=[{key:"import",label:"Protein import",size:30,rate:3e-4,about:"Gates in the guest’s membranes (TOM and TIM) that let proteins made by the host into the guest."},{key:"aac",label:"ATP export",size:6,rate:2e-5,about:"The ADP/ATP carrier, a host invention placed in the guest’s inner membrane: it swaps the host’s ADP for the guest’s ATP."},{key:"nucleus",label:"Nucleus",size:80,rate:.03,about:"An envelope with pores around the host’s DNA, plus the spliceosome: genes are read and their introns cut out before any ribosome sees the message."},{key:"endo",label:"Inner membranes",size:120,rate:.15,about:"The endoplasmic reticulum, Golgi and vesicles: membranes inside the cell for making, sorting and taking things in."},{key:"cyto",label:"Cytoskeleton",size:100,rate:.12,about:"Actin, tubulin and motor proteins that hold a big cell in shape, move it and carry cargo across it."},{key:"phago",label:"Phagocytosis",size:80,rate:.06,about:"Wrapping the membrane around other cells to eat them whole. Needs inner membranes and a cytoskeleton."},{key:"sex",label:"Sex",size:60,rate:.03,about:"Meiosis and cell fusion: shuffling genomes, so a big genome does not pile up broken genes."}],b=Object.fromEntries(v.map((o,e)=>[o.key,e])),y=v.length,ht=v.reduce((o,e)=>o+e.size,0);var w=fe,L=4*Math.PI;function xe(o){return o-=o>>>1&1431655765,o=(o&858993459)+(o>>>2&858993459),Math.imul(o+(o>>>4)&252645135,16843009)>>>24}var T=(o,e,t)=>o[e+(t>>>5)]>>>(t&31)&1,Ae=(o,e,t)=>o[e+(t>>>5)]|=1<<(t&31),Me=(o,e,t)=>o[e+(t>>>5)]&=~(1<<(t&31)),F=class{constructor(e){this.vc=new Float64Array(e),this.gx=new Float64Array(e),this.ns=new Int32Array(e),this.sym=new Uint32Array(e*w),this.nuc=new Uint32Array(e*w),this.gs=new Int32Array(e),this.gsProt=new Int32Array(e),this.corrMiss=new Int32Array(e),this.arch=new Int32Array(e),this.bact=new Int32Array(e),this.junk=new Int32Array(e),this.mod=new Int32Array(e*y),this.extra=new Int32Array(e),this.introns=new Int32Array(e),this.line=new Int32Array(e),this.id=new Int32Array(e),this.from=new Int32Array(e),this.mu=new Float64Array(e),this.pw=new Float64Array(e)}},Fe=["vc","gx","ns","gs","gsProt","corrMiss","arch","bact","junk","extra","introns","line","id","mu","pw"];function He(o,e,t,s){for(let n of Fe)t[n][s]=o[n][e];t.sym.set(o.sym.subarray(e*w,e*w+w),s*w),t.nuc.set(o.nuc.subarray(e*w,e*w+w),s*w),t.mod.set(o.mod.subarray(e*y,e*y+y),s*y)}function Se(o,e){let t=v.map((r,a)=>Math.min(1,o[a]/r.size)),s=e.importable?t[b.import]:0,n=Math.min(1,t[b.endo]/.5)*Math.min(1,t[b.cyto]/.5);return{lin:t,import:s,aac:e.aac?t[b.aac]*s:0,nucleus:t[b.nucleus],endo:t[b.endo],cyto:t[b.cyto],phago:e.phago?t[b.phago]*n:0,sex:t[b.sex]}}var Ke=Q(i.symV,i.gExp),Ne=(o,e)=>{let t=new Float64Array(e+1);t[0]=1;for(let s=1;s<=e;s++)t[s]=t[s-1]*o;return t},We=Ne(i.corrLoss,64),qe=Ne(i.loss,40),Ye=v.reduce((o,e)=>o+e.rate,0);function U(o){let e=0;for(let t=0;t<o.length;t++)e+=o[t];return e}function Ee(o,e,t,s){let n=o.vc,r=n/(n+i.vHalf),a=e.food*(1+i.extraB*E(1+o.extra/i.extraN))*(1+i.cytoB*t.cyto*r),l=i.jS*s*a,h=i.jE*n*t.endo*r*a,m=i.jP*n*n*t.phago/(n+i.vPrey)*(1+i.preyRange*E(1+n/i.vPrey))*a;return{surface:l,endo:h,phago:m,food:l+h+m}}function De(o,e){let t=j(3*o.vc/L),{food:s}=Ee(o,e,Se(o.mod,e),L*t*t);return(1-i.ef)*e.oxygen*s/i.ps}function Xe(o,e,t){let s=Math.max(1,Math.floor(i.roomMax*o.vc/i.symV));return Math.max(1,Math.min(s,Math.round(t*De(o,e))))}function ve(o,e){let t=o.ns,s=o.vc,n=s+t*i.symV,r=j(3*s/L),a=L*r*r,l=Se(o.mod,e),h=o.arch+o.bact+o.extra+U(o.mod),{surface:m,endo:f,phago:p,food:d}=Ee(o,e,l,a),u=i.qOut+(t>0?i.qIn*Math.min(t,i.nq)/i.nq:0),c=i.syn0+(1-i.syn0)*u/(u+1),g=i.ef*d*c,x=(1-i.ef)*e.oxygen*d,S=e.corr?We[Math.min(64,o.corrMiss)]:1,R=t>0?S*Math.min(x,t*i.ps):0,te=t>0?Math.min(i.xMax,i.x0+i.xImport*l.import+i.xAAC*l.aac):0,se=i.vd*(1+i.cytoD*l.cyto)*(1+i.endoD*l.endo),oe=1/(1+n/se*(n/se)),ne=Math.max(.02,1-i.intronCost*o.introns*(1-l.nucleus)),re=Math.max(.2,1-i.load*Math.max(0,h-i.loadFree)/1e4*(1-.9*l.sex)),ae=oe*ne*re,K=1+Math.max(0,s/i.vctrl-1)*(1-l.aac),ie=(h+i.junk*o.junk)*e.geneCost,ce=i.mg*K*ie*Q(s,i.gExp),W=i.m*s+ce,q=i.b*s+i.crep*K*ie,le=t*(i.m*i.symV+i.mg*e.geneCost*o.gsProt*Ke),he=t*(i.b*i.symV+i.crep*e.geneCost*o.gs),me=(g+te*R)*ae,Y=D*(me-W)/q,X=t>0?D*((g+R)*ae-W-le)/(q+he):1/0,Oe=Math.max(0,Math.min(Y,X));return{V:n,S:a,r,food:d,surface:m,endo:f,phago:p,syn:c,ferm:g,leftover:x,resp:R,share:te,transport:oe,intron:ne,load:re,ctrl:S,copies:K,genes:h,power:g+R,hostPower:me,upkeepGenes:ce,upkeepHost:W,buildHost:q,upkeepSym:le,buildSym:he,muHost:Y,muAll:X,limit:t>0&&X<Y?"all":"host",mu:Oe,fx:l}}function Qe(o){let e=i.bactV,t=j(3*e/L),s=L*t*t,n=o.food*i.jS*s,r=(i.ef+(1-i.ef)*o.oxygen)*n,a=A;return{V:e,power:r,genes:a,perGene:r/a}}var V=class{constructor({seed:e="eve",scenario:t="real",params:s={}}={}){this.seed=String(e),this.scenario=C[t]?t:"real",this.params={...$,...C[this.scenario].params,...s},this.rng=new G(`${this.seed}/${this.scenario}`),this.N=i.N,this.A=new F(this.N),this.B=new F(this.N),this.step=0,this.history=[],this.log=[],this.marks={},this.nextId=1,this.lines=0,this.captures=0,this.lost=0,this.transfers=0,this.shown=[],this.events=[];let n=this.A;for(let r=0;r<this.N;r++)n.vc[r]=i.archV,n.arch[r]=B,n.extra[r]=this.rng.poisson(i.startExtra),n.id[r]=this.nextId++,n.from[r]=r;this.assessAll(n),this.record()}get done(){return this.step>=i.steps}get generations(){return this.step*i.G}setParams(e){for(let[t,s]of Object.entries(e??{}))t in $&&(this.params[t]=s);this.assessAll(this.A),this.history.length&&(this.history[this.history.length-1]=this.summary())}cellView(e,t){return{vc:e.vc[t],ns:e.ns[t],gs:e.gs[t],gsProt:e.gsProt[t],corrMiss:e.corrMiss[t],arch:e.arch[t],bact:e.bact[t],junk:e.junk[t],extra:e.extra[t],introns:e.introns[t],mod:e.mod.subarray(t*y,t*y+y)}}assessAll(e){for(let t=0;t<this.N;t++){let s=ve(this.cellView(e,t),this.params);e.mu[t]=s.mu,e.pw[t]=s.power}}run(e=1){for(let t=0;t<e&&!this.done;t++)this.advance()}advance(){let{rng:e,N:t}=this,s=this.A,n=this.B;this.events=[];let r=0;for(let p=0;p<t;p++)r+=s.mu[p];r/=t;let a=new Float64Array(t),l=0;for(let p=0;p<t;p++){let d=r>0&&s.mu[p]>0?Math.max(-60,Math.min(60,D*i.G*(s.mu[p]-r)/r)):-60;a[p]=s.mu[p]>0||r<=0?N(d):0,l+=a[p]}if(!(l>0)){for(let p=0;p<t;p++)a[p]=1;l=t}let h=new Float64Array(t),m=0;for(let p=0;p<t;p++)m+=a[p],h[p]=m;let f=new Int32Array(t).fill(-1);for(let p=0;p<t;p++){let d=e.float()*l,u=0,c=t-1;for(;u<c;){let g=u+c>>1;h[g]>d?c=g:u=g+1}He(s,u,n,p),n.from[p]=u,f[u]<0?f[u]=p:n.id[p]=this.nextId++}this.step++;for(let p=0;p<t;p++)this.mutate(n,p);this.A=n,this.B=s,this.assessAll(n),this.record()}mutate(e,t){let{rng:s}=this,n=this.params;if(s.chance(i.uSize)&&(e.vc[t]=Math.min(i.maxV,Math.max(i.minV,e.vc[t]*N(i.sizeStep*s.normal())))),e.ns[t]>0){s.chance(i.uShare)&&(e.gx[t]=Math.min(100,Math.max(.02,e.gx[t]*N(i.shareStep*s.normal()))));let m=Xe(this.cellView(e,t),n,e.gx[t]);e.ns[t]=m;let f=n.importable?Math.min(1,e.mod[t*y+b.import]/v[b.import].size):0;if(m<=40&&s.chance(qe[m]*(1-.95*f)))this.loseGuests(e,t);else{let p=s.poisson(i.uSymDel);for(let u=0;u<p&&e.gs[t]>0;u++)this.symDeletion(e,t);let d=s.poisson(i.lambdaT*n.transfer*m/(m+3));for(let u=0;u<d&&e.gs[t]>0;u++)this.integrate(e,t)}}else if(n.capture){let m=s.binomial(3,.3333333333333333);m>0&&s.chance(i.pCapture*m)&&this.capture(e,t)}let r=s.poisson(i.uDup);for(let m=0;m<r;m++)this.duplicate(e,t);let a=s.poisson(Ye);for(let m=0;m<a;m++)this.innovate(e,t);let l=s.poisson(i.uHostDel);for(let m=0;m<l;m++)this.hostDeletion(e,t);let h=e.introns[t];if(h>0){let m=e.arch[t]+e.bact[t]+e.extra[t]+U(e.mod.subarray(t*y,t*y+y)),f=Math.max(0,1-h/(i.intronMax*m));e.introns[t]=Math.max(0,h+s.poisson(h*i.intronSpread*f)-s.binomial(h,i.intronLoss))}}capture(e,t){let s=t*w;for(let n=0;n<w;n++)e.sym[s+n]=0;for(let n=0;n<A;n++)Ae(e.sym,s,n);e.ns[t]=i.capturedGuests,e.gx[t]=i.capturedGuests/De(this.cellView(e,t),this.params),e.gs[t]=A,e.gsProt[t]=z,e.corrMiss[t]=0,e.line[t]=++this.lines,this.captures++,this.events.push({kind:"capture",id:e.id[t]})}loseGuests(e,t){e.ns[t]=0,e.gx[t]=0,e.gs[t]=0,e.gsProt[t]=0,e.corrMiss[t]=0,e.line[t]=0,e.sym.fill(0,t*w,t*w+w),this.lost++,this.events.push({kind:"lose",id:e.id[t]})}symDeletion(e,t){let{rng:s}=this,n=t*w,r=s.geometric(i.symDelLen),a=s.int(A),l=[];for(let c=0;c<A&&l.length<r;c++){let g=_[(a+c)%A];T(e.sym,n,g)&&l.push(g)}if(!l.length)return;let h=0;for(let c of l)h+=J[c];let m=e.gsProt[t]-h,f=0;for(let c of l){if(!T(e.nuc,n,c)){let g=ee[c];if(g===1||g===2&&m>0)return}f+=Z[c]}let p=this.params,d=.5*l.length/Math.max(1,e.gs[t])-(p.corr?.2*f:0),u=d>0?Math.min(1,.5+10*d):.005;if(s.chance(u)){for(let c of l)Me(e.sym,n,c),e.gs[t]--,e.gsProt[t]-=J[c],Z[c]&&e.corrMiss[t]++;if(e.gsProt[t]===0&&e.gs[t]>0){for(let c=0;c<A;c++)T(e.sym,n,c)&&Me(e.sym,n,c);e.gs[t]=0}this.events.push({kind:"shrink",id:e.id[t],n:l.length})}}integrate(e,t){let{rng:s}=this,n=this.params,r=t*w,a=s.geometric(i.transferLen),l=s.int(A),h=n.importable?Math.min(1,e.mod[t*y+b.import]/v[b.import].size):0,m=n.importable?Math.min(1,(i.importBase+(1-i.importBase)*h)*n.importEase):0,f=0,p=0;for(let d=0;d<A&&f<a;d++){let u=_[(l+d)%A];if(!T(e.sym,r,u)||(f++,T(e.nuc,r,u)))continue;let c=n.anyImport?ee[u]?1:0:ye[u];if(c>0&&s.chance(Math.min(1,c*m))){Ae(e.nuc,r,u),e.bact[t]++,p++,this.transfers++;let g=ge[u];(g===O.metab||g===O.membrane)&&e.arch[t]>B-ke&&s.chance(.5)&&e.arch[t]--}else e.junk[t]++}e.introns[t]+=s.poisson(i.intronsPerEvent),this.events.push({kind:"transfer",id:e.id[t],n:f,worked:p})}duplicate(e,t){e.extra[t]+=this.rng.geometric(i.dupLen)}innovate(e,t){let{rng:s}=this,n=this.params,r=t*y,a=0,l=v.map((f,p)=>{let u=!(p===b.import&&!n.importable)&&!(p===b.aac&&!n.aac)&&!(p===b.phago&&!n.phago)&&e.mod[r+p]<f.size?f.rate:0;return a+=u,u});if(!(a>0))return;let h=s.float()*a,m=0;for(;m<y-1&&h>=l[m];)h-=l[m++];e.mod[r+m]++}hostDeletion(e,t){let{rng:s}=this,n=s.geometric(i.hostDelLen),r=t*y,a=t*w,l=0;for(let h=0;h<w;h++)l+=xe(e.nuc[a+h]&e.sym[a+h]);for(let h=0;h<n;h++){let m=0;for(let u=0;u<y;u++)m+=e.mod[r+u];let f=[e.extra[t],m,l,e.junk[t]],p=f[0]+f[1]+f[2]+f[3];if(p<=0)return;let d=s.float()*p;if(d<f[0])e.extra[t]--;else if((d-=f[0])<f[1]){let u=d;for(let c=0;c<y;c++){if(u<e.mod[r+c]){e.mod[r+c]--;break}u-=e.mod[r+c]}}else if((d-=f[1])<f[2]){let u=Math.floor(d);for(let c=0;c<w;c++){let g=e.nuc[a+c]&e.sym[a+c],x=xe(g);if(u<x){for(let S=0;S<32;S++)if(g>>>S&1){if(u===0){e.nuc[a+c]&=~(1<<S);break}u--}break}u-=x}e.bact[t]--,l--}else e.junk[t]--}}inject(e){let{rng:t}=this,s=this.A,n=r=>this.log.push({step:this.step,kind:"lab",text:r});switch(e){case"capture":{let r=[];for(let l=0;l<this.N;l++)s.ns[l]===0&&r.push(l);if(!r.length){n("Every cell already has guests.");break}let a=r[t.int(r.length)];this.capture(s,a),n("You put a bacterium inside an archaeon.");break}case"spill":{let r=0;for(let a=0;a<this.N;a++)if(s.ns[a]>0){for(let l=0;l<10&&s.gs[a]>0;l++)this.integrate(s,a);r++}n(r?"Guests burst and spilled their DNA into every host.":"No cell has guests yet.");break}case"aac":{if(!this.params.aac){n("The ADP/ATP carrier is switched off in this experiment.");break}for(let r=0;r<this.N;r++)s.mod[r*y+b.aac]=v[b.aac].size;n("Every cell now has the genes for the ADP/ATP carrier. It works only where the host can import proteins into its guests.");break}case"cure":{let r=0;for(let a=0;a<this.N;a++)s.ns[a]>0&&t.chance(.5)&&(this.loseGuests(s,a),r++);n(r?`Half the cells lost all their guests (${r} cells).`:"No cell has guests to lose.");break}default:return}this.assessAll(s),this.history.length&&(this.history[this.history.length-1]=this.summary())}typical(){let e=this.A,t=[],s=[];for(let r=0;r<this.N;r++)(e.ns[r]>0?t:s).push(r);if(t.length>this.N*.05)return t.sort((r,a)=>e.gs[r]-e.gs[a]||e.id[r]-e.id[a]),t[t.length>>1];let n=r=>e.extra[r]+e.bact[r]+U(e.mod.subarray(r*y,r*y+y));return s.sort((r,a)=>n(r)-n(a)||e.id[r]-e.id[a]),s[s.length>>1]}summary(){let e=this.A,t=this.params,s=0,n=0,r=new Set;for(let p=0;p<this.N;p++)e.ns[p]>0&&s++,e.line[p]&&r.add(e.line[p]),n+=e.mu[p];let a=this.typical(),l=this.cellView(e,a),h=ve(l,t),m=Qe(t),f=h.fx.lin;return{step:this.step,gen:this.step*i.G,share:s/this.N,mu:n/this.N,ns:l.ns,gs:l.gs,gsProt:l.gsProt,gh:h.genes,arch:l.arch,bact:l.bact,extra:l.extra,junk:l.junk,introns:l.introns,modGenes:U(l.mod),V:h.V,vc:l.vc,power:h.power,hostPower:h.hostPower,food:h.food,foodSurface:h.surface,foodEndo:h.endo,foodPhago:h.phago,ferm:h.ferm,resp:h.resp,upkeepHost:h.upkeepHost,upkeepGenes:h.upkeepGenes,upkeepSym:h.upkeepSym,buildHost:h.buildHost,buildSym:h.buildSym,copies:h.copies,transport:h.transport,intronEff:h.intron,loadEff:h.load,perGene:h.power/h.genes,perGeneRel:h.power/h.genes/m.perGene,doubling:h.mu>0?D/h.mu:1/0,atpShare:h.share,limit:h.limit,mods:f.map(p=>Math.round(p*1e3)/1e3),lines:r.size,line:e.line[a],captures:this.captures,transfers:this.transfers,lost:this.lost}}record(){let e=this.summary();this.history.push(e),this.notes(e)}notes(e){let t=this.marks,s=(a,l,h)=>{t[a]||(t[a]=this.step,this.log.push({step:this.step,kind:l,text:h}))},n=a=>Math.round(a).toLocaleString("en-US");for(let a of this.events)a.kind==="capture"&&s("firstCapture","merger","An archaeon has closed its protrusions around a bacterium: a cell inside a cell."),a.kind==="lose"&&t.firstCapture&&s("firstLoss","merger","A cell has lost its guests: none of them was passed on when it divided, so its daughter is a plain archaeon again.");let r=e.share>.5;r&&s("sweep","merger","Cells with guests inside now outnumber plain archaea."),r&&(e.mods[b.import]>=.999&&s("import","host","The host can now send its own proteins into its guests."),e.gs<1500&&s("outside","genes",`The guests have lost most of the genes they needed to live outside: ${n(e.gs)} genes left.`),e.atpShare>.5&&s("aac","host","The ADP/ATP carrier: the guests now hand over most of their ATP. They have become mitochondria."),e.gs<700&&s("g700","genes",`The guest genome is down to ${n(e.gs)} genes, as small as that of an insect endosymbiont like Buchnera.`),e.gh>6e3&&s("g6000","host","The host genome has passed 6,000 genes: more than almost any archaeon has."),e.gs<200&&s("g200","genes",`Only ${n(e.gs)} genes are left in the guest genome; the host makes nearly everything its guests need.`),e.mods[b.nucleus]>=.999&&s("nucleus","host","A nucleus now encloses the host genome."),e.mods[b.endo]>=.999&&s("endo","host","A full set of inner membranes: endoplasmic reticulum, Golgi and vesicles."),e.mods[b.cyto]>=.999&&s("cyto","host","A full cytoskeleton: the cell can grow large and move cargo across itself."),e.mods[b.phago]>=.999&&s("phago","host","Phagocytosis: the cell eats bacteria whole."),e.mods[b.sex]>=.999&&s("sex","host","Sex: meiosis and cell fusion shuffle the genome."),e.V>1e3&&s("big","cell","The typical cell is now more than 1,000 µm³: a thousand times a bacterium."),e.gs>0&&e.gs<100&&s("g100","genes",`The guest genome is down to ${n(e.gs)} genes, in the range of real mitochondrial genomes.`))}genome(){let e=this.A,t=this.typical(),s=t*w,n=[],r=[];for(let a=0;a<A;a++)T(e.sym,s,a)?n.push(a):T(e.nuc,s,a)&&r.push(a);return{kept:n,moved:r,ns:e.ns[t]}}frame(e=30){let t=this.A,s=new Map;for(let c=0;c<this.N;c++)s.has(t.id[c])||s.set(t.id[c],c);let n=this.shown.filter(c=>s.has(c)),r=new Set(n),a=0;for(let c=0;c<this.N;c++)t.ns[c]>0&&a++;let l=Math.round(e*a/this.N),h=n.filter(c=>t.ns[s.get(c)]>0).length;for(let c of this.events)c.kind==="capture"&&s.has(c.id)&&!r.has(c.id)&&r.size<e+4&&(r.add(c.id),n.push(c.id),h++);let m=[];for(let c=0;c<this.N;c++)m.push(c);let f=this.step*2654435761>>>0;for(let c=m.length-1;c>0;c--){f=Math.imul(f^f>>>15,2246822519)+3266489917>>>0;let g=f%(c+1);[m[c],m[g]]=[m[g],m[c]]}for(let c of m){if(n.length>=e)break;let g=t.id[c];if(r.has(g))continue;let x=t.ns[c]>0;x&&h>=Math.max(l,a?1:0)||!x&&n.length-h>=e-l||(r.add(g),n.push(g),x&&h++)}this.shown=n;let p=n.map(c=>{let g=s.get(c);return{id:c,V:t.vc[g]+t.ns[g]*i.symV,vc:t.vc[g],ns:t.ns[g],gs:t.gs[g],line:t.line[g],mods:v.map((x,S)=>Math.min(1,t.mod[g*y+S]/x.size)),mu:t.mu[g]}}),d=this.typical(),u=d*w;return{step:this.step,gen:this.step*i.G,done:this.done,cells:p,typical:{id:t.id[d],sym:Array.from(t.sym.subarray(u,u+w)),nuc:Array.from(t.nuc.subarray(u,u+w)),mods:Array.from(t.mod.subarray(d*y,d*y+y))},events:this.events.slice(0,40)}}geometry(){return{genes:k.map(e=>[e.name,e.kind,e.tm,e.corr,e.prot]),display:Array.from(we),kinds:P.map(e=>({key:e.key,label:e.label,about:e.about})),modules:v.map(e=>({key:e.key,label:e.label,size:e.size,about:e.about})),hostGenes:B,N:this.N,G:i.G,steps:i.steps,archV:i.archV,symV:i.symV,bactV:i.bactV}}};var Ie=[2,6,20,1e3];function Ge(o){let e=null,t=null,s=!1,n=2,r=null,a=0,l=0,h=()=>{let d=e.history,u=d.slice(a);a=d.length;let c=e.log.slice(l);l=e.log.length,o({type:"tick",frame:e.frame(),points:u,notes:c,params:e.params,running:s,genome:e.done?e.genome():null})},m=()=>{s=!1,r=null,t&&clearTimeout(t),t=null},f=()=>{if(t=null,!s)return;let d=Ie[n]??Ie[2],u=24,c=Date.now(),g=Math.max(1,Math.round(d/20)),x=0;for(;!e.done&&(x<g||d>=1e3&&Date.now()-c<u)&&!(r!==null&&e.step>=r||(e.run(1),x++,Date.now()-c>u*2)););let S=r!==null&&e.step>=r;(e.done||S)&&(s=!1,r=null),h();let R=d>=1e3?0:Math.max(0,1e3*Math.max(x,1)/d-(Date.now()-c));s?t=setTimeout(f,R):o({type:"paused",step:e.step,done:e.done})},p=()=>{e.done||(s=!0,t||(t=setTimeout(f,0)))};return function(u){try{switch(u.type){case"init":{m(),e=new V({seed:u.seed,scenario:u.scenario,params:u.params??{}}),a=0,l=0,o({type:"ready",geometry:e.geometry(),seed:e.seed,scenario:e.scenario,scenarios:C,defaults:$,ranges:de,steps:i.steps,G:i.G}),h();break}case"play":if(!e)break;typeof u.speed=="number"&&(n=u.speed),r=null,p();break;case"speed":n=u.speed;break;case"pause":m(),e&&o({type:"paused",step:e.step,done:e.done});break;case"runTo":if(!e)break;if(typeof u.speed=="number"&&(n=u.speed),e.step>=u.step){m(),o({type:"paused",step:e.step,done:e.done});break}r=u.step,p();break;case"step":if(!e)break;m(),e.run(u.n??1),h(),o({type:"paused",step:e.step,done:e.done});break;case"inject":if(!e)break;e.inject(u.kind),h();break;case"set":if(!e)break;e.setParams(u.patch),h();break;default:break}}catch(c){m(),o({type:"error",message:String(c&&c.stack?c.stack:c)})}}}var Je=()=>new Promise(o=>setTimeout(o,0)),H=["real","alone","noImport"];async function Re(o,{seed:e="eve"}={}){let t=H.length*i.steps,s={},n=Date.now();for(let r=0;r<H.length;r++){let a=new V({seed:e,scenario:H[r]});for(;!a.done;)a.run(1),Date.now()-n>40&&(o&&o({step:r*i.steps+a.step,total:t}),await Je(),n=Date.now());s[H[r]]={last:a.history[a.history.length-1],genome:a.genome()}}return et(s.real,{alone:s.alone.last,noImport:s.noImport.last})}var I=o=>Math.round(o).toLocaleString("en-US"),M=o=>Number(o.toPrecision(2)).toLocaleString("en-US"),Pe=o=>Math.cbrt(6*o/Math.PI),Ze=o=>o>=1?`${M(o)} days`:`${M(o*24)} hours`;function Te(o){let e=o.filter(t=>k[t].prot);return e.reduce((t,s)=>t+k[s].tm,0)/Math.max(1,e.length)}function et(o,e=null){let t=o.last,s=o.genome,n=new Set(s.kept),r=Te(s.kept),a=Te(s.moved),l=t.gsProt/z,h=t.ns*i.symV/t.V,m=[];if(e){let d=e.alone,u=Pe(d.V);m.push({id:"asgard",how:"tuned",what:"An archaeon on its own: its size and how fast it divides",model:`${M(u)} µm across, divides every ${Ze(d.doubling)}`,real:"The Asgard archaeon grown by Imachi and colleagues: 0.3 to 0.75 µm across, divides every 14 to 25 days",pass:u>=.3&&u<=.75&&d.doubling>=14&&d.doubling<=25,source:"Imachi et al. 2020"});let c=d.mods.filter(g=>g>=.999).length;m.push({id:"alone",how:"emerges",what:"Without the merger, archaea stay small and simple",model:`after ${I(i.steps*i.G)} generations: ${I(d.gh)} genes, ${M(d.V)} µm³, ${c?`${c} eukaryotic features`:"no eukaryotic feature complete"}`,real:"No archaeon or bacterium has a nucleus, an inner membrane system and phagocytosis; Asgard archaea carry only some of the genes for them",pass:c===0&&d.gh<5e3&&d.V<1,source:"Imachi et al. 2020; Lane & Martin 2010"})}m.push({id:"once",how:"emerges",what:"One merger founds every cell at the end",model:`${I(t.captures)} archaea took a partner inside; at the end every cell descends from ${t.lines===1?"one of them":`${t.lines} of them`}`,real:"All mitochondria descend from one alphaproteobacterium",pass:t.lines===1,source:"Roger, Muñoz-Gómez & Kamikawa 2017"}),m.push({id:"mtGenes",how:"emerges",what:"Genes left in the guest genome at the end",model:`${I(t.gs)} genes, ${I(t.gsProt)} of them for proteins: ${M(l*100)} % of the ${I(z)} protein genes it started with`,real:"37 in humans (13 for proteins) up to 100 in the protist Andalucia (66 for proteins); free-living relatives have thousands",pass:t.gs>=5&&t.gs<=110&&l>=.002&&l<=.03,source:"Anderson et al. 1981; Burger et al. 2013"});let f=["cox1","cob"].filter(d=>n.has(be[d]));if(m.push({id:"which",how:"built",what:"The genes that stay are the oily core of the respiratory chain",model:`${f.length===2?"cox1 and cob kept":f.length?`only ${f[0]} kept`:"cox1 and cob lost"}; kept proteins have ${M(r)} helices in the membrane on average, moved ones ${M(a)}`,real:"cox1 and cob stay in almost every mitochondrial genome; the proteins mitochondria still make are the most membrane-bound subunits",pass:f.length===2&&r>2*a,source:"Björkholm et al. 2015; Johnston & Williams 2016"}),e){let d=e.noImport.gs;m.push({id:"noImport",how:"built",what:"Without protein import, the guest genome stops shrinking much sooner",model:`${I(d)} genes left, ${M(d/Math.max(1,t.gs))} times as many as with import`,real:"Insect endosymbionts, whose hosts send in few proteins, keep about 120 to 650 genes; mitochondria keep a handful to 100",pass:d>=300&&d>=5*t.gs,source:"McCutcheon & Moran 2012"})}m.push({id:"host",how:"tuned",what:"Genes in the host genome at the end",model:`${I(t.gh)} genes, ${M(t.gh/3600)} times the archaeon’s`,real:"Free-living protists have 6,000 to 40,000 genes (yeast about 6,000, Naegleria about 16,000); Asgard archaea about 4,000 to 5,000",pass:t.gh>=6e3&&t.gh<=4e4,source:"Goffeau et al. 1996; Fritz-Laylin et al. 2010; Spang et al. 2015"});let p=t.V/i.bactV;return m.push({id:"size",how:"tuned",what:"How big the cells grow, compared with a bacterium",model:`${M(t.V)} µm³, ${M(Pe(t.V))} µm across: ${M(p)} times the bacterium`,real:"An average protist has about 15,000 times the mass of an average bacterium (accept 1,500 to 150,000)",pass:p>=1500&&p<=15e4,source:"Lane & Martin 2010"}),m.push({id:"perGene",how:"emerges",what:"Power per gene, compared with a bacterium",model:`${M(t.perGeneRel)} times as much`,real:"Four to five orders of magnitude more: 10,000 to 100,000 times as much (accept 3,000 to 300,000)",pass:t.perGeneRel>=3e3&&t.perGeneRel<=3e5,source:"Lane & Martin 2010",note:"Nothing aims at this number, but it rests on the cell size and genome size, which were tuned."}),m.push({id:"mitoShare",how:"tuned",what:"Share of the cell taken up by mitochondria",model:`${M(h*100)} %`,real:"From about 8 % of a white blood cell to 22 % of a liver cell and nearly half of a heart muscle cell (accept 5 to 50 %)",pass:h>=.05&&h<=.5,source:"Weibel et al. 1969; David 1977"}),{checks:m,passed:m.filter(d=>d.pass).length,total:m.length}}var tt=Ge(o=>self.postMessage(o));self.onmessage=o=>{let e=o.data;if(e.type==="validate"){Re(t=>self.postMessage({type:"validation-progress",...t})).then(t=>self.postMessage({type:"validation",result:t})).catch(t=>self.postMessage({type:"error",message:String(t)}));return}tt(e)};})();';function Ls(){if(!Ot||typeof Worker>"u"||typeof Blob>"u")return null;try{return URL.createObjectURL(new Blob([Ot],{type:"text/javascript"}))}catch{return null}}function Wt(s){let e=Ls(),t=null,n=null,o=!1,a=[],r=()=>{if(!n){t&&t.terminate(),t=null,n=Rt(h=>setTimeout(()=>s(h),0));for(let h of a.splice(0))n(h)}};if(e)try{t=new Worker(e),t.onmessage=h=>{o=!0,a.length=0,s(h.data)},t.onerror=h=>{o?s({type:"error",message:h.message||"The simulation stopped."}):(h.preventDefault?.(),r())}}catch{t=null}return t||r(),{get mode(){return t?"worker":"page"},send(h){t?(o||a.push(h),t.postMessage(h)):n(h)},validate(h){return e&&t?new Promise((u,m)=>{let d;try{d=new Worker(e)}catch{rt(h).then(u,m);return}d.onmessage=i=>{let f=i.data;f.type==="validation-progress"?h?.(f):f.type==="validation"?(d.terminate(),u(f.result)):f.type==="error"&&(d.terminate(),m(new Error(f.message)))},d.onerror=i=>{d.terminate(),m(new Error(i.message||"The check stopped."))},d.postMessage({type:"validate"})}):rt(h)}}}var A={arch:[240,176,76],guest:[95,211,154],mito:[255,112,80],dna:[118,146,255],er:[236,122,196],cyto:[120,214,236],partner:[196,204,255],food:[120,128,150],outside:[150,148,178],supply:[240,176,76],metab:[95,211,154],genetic:[100,196,244],resp:[255,112,80],membrane:[236,122,196],rna:[246,222,96],extra:[190,182,236],junk:[96,96,116]},Ht=["Import","Carrier","Nucleus","ER","Skeleton","Eating","Sex"];var Rs=4,Vt=3,Bt=2,Ft=5,I=(s,e)=>`rgba(${s[0]},${s[1]},${s[2]},${e})`,lt=(s,e,t)=>[s[0]+(e[0]-s[0])*t,s[1]+(e[1]-s[1])*t,s[2]+(e[2]-s[2])*t].map(Math.round),ue=(s,e,t)=>Math.max(e,Math.min(t,s)),_e=s=>Math.cbrt(6*s/Math.PI),zt=Math.log(3033),Ds=Math.log(60),Se=s=>Math.round(s).toLocaleString("en-US"),jt=[236,200,92],Cs=s=>s<.5?lt(A.guest,jt,s*2):lt(jt,A.mito,s*2-1);function D(s,e=0){let t=(Math.imul(s^2654435769,2246822507)^Math.imul(e+1663821227,3266489909))>>>0;return t^=t>>>15,t=Math.imul(t,739982445)>>>0,t^=t>>>12,(t>>>0)/4294967296}function Os(s){let e=_e(s);return`${e<10?e.toFixed(e<1?2:1):Math.round(e)} µm`}var qe=class{constructor(e){this.canvas=e,this.ctx=e.getContext("2d"),this.view="cells",this.geometry=null,this.frame=null,this.h=null,this.first=null,this.cells=new Map,this.ghosts=[],this.flashes=[],this.particles=[],this.bacteria=[],this.W=1,this.H=1,this.last=0,this.prevTyp=null,this.grid=null,this.reduced=typeof matchMedia=="function"&&matchMedia("(prefers-reduced-motion: reduce)").matches}setGeometry(e){this.geometry=e,this.cells.clear(),this.ghosts=[],this.flashes=[],this.particles=[],this.prevTyp=null,this.first=null,this.bacteria=[];for(let n=0;n<12;n++)this.bacteria.push(this.newBacterium(n,!0));let t=e.kinds.length;this.byKind=Array.from({length:t},()=>[]);for(let n of e.display)this.byKind[e.genes[n][1]].push(n)}newBacterium(e,t=!1){let n=D(e+1,(this.bacteria.length+7)*13+Math.floor(this.last/1e3));return{u:t?D(e,3):n<.5?0:.999,v:D(e,5),a:D(e,7)*Math.PI*2,s:.6+.4*D(e,9),eaten:0}}setView(e){this.view=e,this.particles=[]}resize(){let e=this.canvas.getBoundingClientRect();this.dpr=Math.min(2,window.devicePixelRatio||1),this.W=Math.max(1,e.width),this.H=Math.max(1,e.height),this.canvas.width=Math.round(this.W*this.dpr),this.canvas.height=Math.round(this.H*this.dpr),this.ctx.setTransform(this.dpr,0,0,this.dpr,0,0),this.grid=null}setFrame(e,t,n){let o=typeof performance<"u"?performance.now():0;this.first=n??this.first;let a=new Set;for(let r of e.cells){a.add(r.id);let h=this.cells.get(r.id);if(!h){let[u,m]=this.freeSpot(r.id);h={id:r.id,u,v:m,vu:0,vv:0,born:o,phase:D(r.id,4)*Math.PI*2},this.cells.set(r.id,h)}h.c=r}for(let[r,h]of this.cells)a.has(r)||(this.ghosts.push({...h,gone:o}),this.cells.delete(r));this.order=e.cells.map(r=>r.id);for(let r of e.events)(r.kind==="capture"||r.kind==="lose")&&this.cells.has(r.id)&&this.flashes.push({id:r.id,kind:r.kind,t:o});this.flashes.length>6&&this.flashes.splice(0,this.flashes.length-6),this.geneChanges(e.typical,o),this.frame=e,this.h=t}freeSpot(e){let{W:t,H:n}=this,o=[D(e,2),D(e,3)],a=-1;for(let r=0;r<16;r++){let h=D(e,30+r),u=D(e,60+r),m=1/0;for(let d of this.cells.values()){let i=Math.abs(d.u-h)*t,f=Math.abs(d.v-u)*n;i>t/2&&(i=t-i),f>n/2&&(f=n-f),m=Math.min(m,i*i+f*f)}m>a&&(a=m,o=[h,u])}return o}geneChanges(e,t){let n=this.prevTyp;if(this.prevTyp=e,!n||n.id!==e.id||this.view!=="genes"||!this.grid||this.reduced)return;let o=40;for(let a=0;a<e.sym.length&&o>0;a++){let r=n.sym[a]&~e.sym[a],h=e.nuc[a]&~n.nuc[a];if(!(!r&&!h))for(let u=0;u<32&&o>0;u++){let m=a*32+u,d=this.grid.at[m];d&&(h>>>u&1?(this.particles.push({kind:"move",g:m,x:d.x,y:d.y,t,dur:900+300*D(m,11)}),o--):r>>>u&1&&!(e.nuc[a]>>>u&1)&&(this.particles.push({kind:"lose",g:m,x:d.x,y:d.y,t,dur:700}),o--))}}this.particles.length>160&&this.particles.splice(0,this.particles.length-160)}draw(e){let t=Math.min(.05,Math.max(0,(e-(this.last||e))/1e3));this.last=e;let n=this.ctx,{W:o,H:a}=this,r=n.createRadialGradient(o*.5,a*.45,0,o*.5,a*.5,Math.max(o,a)*.75);r.addColorStop(0,"#111527"),r.addColorStop(1,"#05060c"),n.fillStyle=r,n.fillRect(0,0,o,a),!(!this.frame||!this.h)&&(this.view==="genes"?this.drawGenes(e):this.view==="energy"?this.drawEnergy():this.drawCells(e,t))}radius(e){return ue(this.W/26,14,24)/2*Math.pow(_e(e)/.55,.24)}drawCells(e,t){let n=this.ctx,{W:o,H:a}=this,r=!this.reduced,h=this.order??[],u=0,m=0;for(let i of h){let f=this.cells.get(i);if(!f)continue;let p=this.radius(f.c.V);if(m>=6&&u+Math.PI*p*p>.2*o*a)break;u+=Math.PI*p*p,m++}let d=h.slice(0,m).map(i=>this.cells.get(i)).filter(Boolean);if(r){for(let i of d)i.vu+=(D(i.id,Math.floor(e/1600))-.5)*25e-5*t*60,i.vv+=(D(i.id+7,Math.floor(e/1700))-.5)*25e-5*t*60;for(let i=0;i<d.length;i++){let f=d[i],p=this.radius(f.c.V);for(let l=i+1;l<d.length;l++){let g=d[l],w=(g.u-f.u)*o,y=(g.v-f.v)*a;w>o/2&&(w-=o),w<-o/2&&(w+=o),y>a/2&&(y-=a),y<-a/2&&(y+=a);let k=Math.hypot(w,y)||1,P=p+this.radius(g.c.V)+10;if(k<P){let T=(P-k)/P*.006;f.vu-=w/k*T,f.vv-=y/k*T,g.vu+=w/k*T,g.vv+=y/k*T}}}for(let i of d){i.vu*=.94,i.vv*=.94;let f=.0035;i.vu=ue(i.vu,-f,f),i.vv=ue(i.vv,-f,f),i.u=(i.u+i.vu*t*8+1)%1,i.v=(i.v+i.vv*t*8+1)%1}}this.drawBacteria(d,e,t),n.save();for(let i of d)this.drawCell(i,e,1);this.ghosts=this.ghosts.filter(i=>e-i.gone<450);for(let i of this.ghosts)i.c&&this.drawCell(i,e,1-(e-i.gone)/450);n.restore(),this.drawFlashes(e),this.drawCellNotes()}drawBacteria(e,t,n){let o=this.ctx,{W:a,H:r}=this,h=e.filter(m=>m.c.mods[Ft]>.5),u=this.radius(1)*1.1;for(let m=0;m<this.bacteria.length;m++){let d=this.bacteria[m];this.reduced||(d.a+=(D(m,Math.floor(t/2e3))-.5)*.04,d.u=(d.u+Math.cos(d.a)*9e-4*d.s*n*30+1)%1,d.v=(d.v+Math.sin(d.a)*9e-4*d.s*n*30+1)%1);let i=d.u*a,f=d.v*r;if(d.eaten){d.eaten+=n,d.eaten>1.2&&(this.bacteria[m]=this.newBacterium(m+Math.floor(t),!1));continue}for(let p of h){let l=this.radius(p.c.V);Math.hypot(p.u*a-i,p.v*r-f)<l*.95&&(d.eaten=n||.01,p.meal=t)}o.save(),o.translate(i,f),o.rotate(d.a),o.fillStyle=I(A.guest,.32),o.strokeStyle=I(A.guest,.55),o.lineWidth=1,qt(o,u,u*.42),o.fill(),o.stroke(),o.restore()}}drawCell(e,t,n){let o=this.ctx,{W:a,H:r}=this,h=e.c,u=this.radius(h.V),m=ue((t-e.born)/500,0,1),d=n*(.35+.65*m),i=e.u*a,f=e.v*r,p=h.mods,l=p[Rs],g=this.reduced?0:t/1e3,w=[i],y=[f];i<u*2.4&&w.push(i+a),i>a-u*2.4&&w.push(i-a),f<u*2.4&&y.push(f+r),f>r-u*2.4&&y.push(f-r);for(let k of w)for(let P of y)this.cellAt(k,P,u,h,e,g,d,l,p,t)}cellAt(e,t,n,o,a,r,h,u,m,d){let i=this.ctx,f=Math.max(m[Bt],u,m[Vt]),p=40,l=[];for(let x=0;x<p;x++){let M=x/p*Math.PI*2,S=.025*Math.sin(3*M+a.phase+r*.9)+u*(.06*Math.sin(2*M+a.phase*2+r*.6)+.05*Math.sin(5*M-r*.8+a.phase)),E=n*(1+S);l.push([e+E*Math.cos(M),t+E*Math.sin(M)])}let g=()=>{i.beginPath();for(let S=0;S<p;S++){let E=l[S],N=l[(S+1)%p],V=(E[0]+N[0])/2,F=(E[1]+N[1])/2;S===0?i.moveTo(V,F):i.quadraticCurveTo(E[0],E[1],V,F)}let x=l[0],M=l[1];i.quadraticCurveTo(x[0],x[1],(x[0]+M[0])/2,(x[1]+M[1])/2),i.closePath()},w=1-u;if(w>.05&&n<40){let x=5+Math.floor(D(a.id,21)*3);i.lineWidth=1;for(let M=0;M<x;M++){let S=a.phase+M/x*Math.PI*2+.3*D(a.id,M),E=n*(.9+.8*D(a.id,M+40)),N=.35*Math.sin(r*.7+M*1.7+a.phase),V=e+n*Math.cos(S),F=t+n*Math.sin(S),j=e+(n+E*.55)*Math.cos(S+N*.6),ne=t+(n+E*.55)*Math.sin(S+N*.6),q=e+(n+E)*Math.cos(S+N),U=t+(n+E)*Math.sin(S+N);i.strokeStyle=I(A.arch,.45*h*w),i.beginPath(),i.moveTo(V,F),i.quadraticCurveTo(j,ne,q,U),i.stroke(),D(a.id,M+80)<.55&&(i.fillStyle=I(A.partner,.7*h*w),i.beginPath(),i.arc(q,U,Math.max(1.3,n*.13),0,Math.PI*2),i.fill())}}let y=i.createRadialGradient(e-n*.3,t-n*.3,n*.1,e,t,n*1.05),k=lt(A.arch,[176,168,214],ue(f,0,1));if(y.addColorStop(0,I(k,.2*h)),y.addColorStop(1,I(k,.07*h)),g(),i.fillStyle=y,i.fill(),i.save(),g(),i.clip(),i.globalCompositeOperation="lighter",u>.15){i.strokeStyle=I(A.cyto,.2*u*h),i.lineWidth=.7;let x=10;for(let M=0;M<x;M++){let S=a.phase*.7+M/x*Math.PI*2;i.beginPath(),i.moveTo(e+n*.28*Math.cos(S),t+n*.28*Math.sin(S)),i.lineTo(e+n*.98*Math.cos(S+.12),t+n*.98*Math.sin(S+.12)),i.stroke()}}let P=m[Vt];if(P>.15&&n>9){i.strokeStyle=I(A.er,.55*P*h),i.lineWidth=.9;for(let x=0;x<3;x++){let M=n*(.42+.09*x),S=a.phase+x*1.3;i.beginPath();for(let E=0;E<=24;E++){let N=S+E/24*Math.PI*1.3,V=M*(1+.06*Math.sin(E*1.6+x)),F=e+V*Math.cos(N),j=t+V*Math.sin(N);E===0?i.moveTo(F,j):i.lineTo(F,j)}i.stroke()}}let T=m[Bt],G=n*(.3+.04*T);if(i.fillStyle=I(A.dna,(.16+.24*T)*h),i.beginPath(),T<.5)for(let x=0;x<=12;x++){let M=x/12*Math.PI*2,S=G*(.75+.3*D(a.id,x+100));x===0?i.moveTo(e+S*Math.cos(M),t+S*Math.sin(M)):i.lineTo(e+S*Math.cos(M),t+S*Math.sin(M))}else i.arc(e,t,G,0,Math.PI*2);i.fill(),T>=.5&&(i.strokeStyle=I(A.dna,.85*T*h),i.lineWidth=1.1,i.beginPath(),i.arc(e,t,G,0,Math.PI*2),i.stroke(),i.beginPath(),i.arc(e,t,G+1.6,0,Math.PI*2),i.lineWidth=.6,i.stroke());let H=m[Ft];if(H>.3&&n>10){let x=1+Math.floor(H*2)+(a.meal&&performance.now()-a.meal<4e3?1:0);for(let M=0;M<x;M++){let S=a.phase+2.1*M+.5,E=n*(.62+.12*D(a.id,M+300)),N=e+E*Math.cos(S),V=t+E*Math.sin(S);i.strokeStyle=I(A.er,.6*H*h),i.lineWidth=.8,i.beginPath(),i.arc(N,V,n*.1,0,Math.PI*2),i.stroke(),i.fillStyle=I(A.guest,.6*H*h),i.beginPath(),i.arc(N,V,n*.045,0,Math.PI*2),i.fill()}}if(o.ns>0){let x=ue((zt-Math.log(Math.max(1,o.gs)))/(zt-Ds),0,1),M=Cs(x),S=Math.max(1,Math.min(o.ns,Math.floor(n*n/14),60)),E=Math.max(2.6,n*.17);i.globalCompositeOperation="source-over",i.fillStyle=I(M,.78*h);for(let N=0;N<S;N++){let V=D(a.id*131+N,1),F=n*(.4+.5*Math.sqrt(D(a.id*131+N,2))),j=V*Math.PI*2+.06*Math.sin(r*.5+N);i.save(),i.translate(e+F*Math.cos(j),t+F*Math.sin(j)),i.rotate(D(a.id*131+N,3)*Math.PI+.2*Math.sin(r*.4+N*.7)),qt(i,E,E*.46),i.fill(),i.restore()}}i.restore(),g(),i.strokeStyle=I(A.arch,.22*h),i.lineWidth=3.4,i.stroke(),i.strokeStyle=I(A.arch,.9*h),i.lineWidth=1.1,i.stroke()}drawFlashes(e){let t=this.ctx,{W:n,H:o}=this;this.flashes=this.flashes.filter(r=>e-r.t<2600);let a=0;for(let r of this.flashes){let h=this.cells.get(r.id);if(!h)continue;let u=(e-r.t)/2600,m=this.radius(h.c.V),d=h.u*n,i=h.v*o,f=r.kind==="capture"?A.guest:A.partner;if(t.strokeStyle=I(f,.8*(1-u)),t.lineWidth=1.5,t.beginPath(),t.arc(d,i,m*(1.3+1.2*u),0,Math.PI*2),t.stroke(),a<2){a++,t.font='600 11.5px "Figtree", system-ui, sans-serif',t.textAlign=d>n-120?"right":"left",t.textBaseline="middle",t.fillStyle=I([255,255,255],.92*(1-u*u));let p=d+(t.textAlign==="left"?m*1.5+4:-m*1.5-4);t.fillText(r.kind==="capture"?"takes a partner inside":"loses its guests",p,ue(i-m*1.2,10,o-10))}}}drawCellNotes(){let e=this.ctx,{W:t,H:n}=this,o=this.h;e.font='500 11px "JetBrains Mono", ui-monospace, monospace',e.textAlign="left",e.textBaseline="alphabetic";let a=`typical cell ${Os(o.V)} across`;_t(e,42,n-30,e.measureText(a).width+8,22),e.fillStyle="rgba(232,230,245,0.86)",e.fillText(a,46,n-14);let r=t<500?32:46,h=t-r-12,u=n-r-22;e.font='500 9.5px "Figtree", system-ui, sans-serif';let m=e.measureText("to scale: cell, bacterium").width+12;_t(e,t-m-4,u-6,m,r+26);let d=_e(o.V),i=_e(1),f=Math.max(d,i),p=r/2*(d/f),l=r/2*(i/f);e.strokeStyle=I(A.arch,.9),e.lineWidth=1.2,e.beginPath(),e.arc(h+r/2,u+r/2,Math.max(.8,p),0,Math.PI*2),e.stroke(),e.fillStyle=I(A.guest,.85),e.beginPath();let g=p>=l?h+r/2+p+l+4:h+r/2;e.arc(Math.min(t-3,g),u+r/2+(p>=l?p-l:0),Math.max(.9,l),0,Math.PI*2),p>=l?e.fill():(e.strokeStyle=I(A.guest,.85),e.stroke()),e.font='500 9.5px "Figtree", system-ui, sans-serif',e.textAlign="right",e.fillStyle="rgba(232,230,245,0.72)",e.fillText("to scale: cell, bacterium",t-10,n-9)}layoutGenes(){let{W:e,H:t}=this,n=this.geometry,o=12,a=30,r=e<520?104:92,h=e-2*o,u=t-a-r-6,m=4,d=null;for(let l of[10,9,8,7,6,5,4,3]){let g=Math.floor(h/l),w=0;for(let k of this.byKind)w+=Math.ceil(k.length/g);let y=w*l+m*(this.byKind.length-1);if(y<=u){d={p:l,cols:g,height:y};break}}d||(d={p:3,cols:Math.floor(h/3),height:u});let i=new Array(n.genes.length),f=a,p=[];for(let l=0;l<this.byKind.length;l++){let g=this.byKind[l],w=f;g.forEach((y,k)=>{i[y]={x:o+k%d.cols*d.p,y:f+Math.floor(k/d.cols)*d.p,kind:l}}),f+=Math.ceil(g.length/d.cols)*d.p+m,p.push({kind:l,y0:w,y1:f-m})}this.grid={at:i,p:d.p,size:Math.max(2,d.p-(d.p>=6?1.5:1)),pad:o,top:a,bottomY:f,blocks:p,W:e,H:t}}drawGenes(e){let t=this.ctx,n=this.geometry,o=this.h;(!this.grid||this.grid.W!==this.W||this.grid.H!==this.H)&&this.layoutGenes();let a=this.grid,r=this.frame.typical,h=n.kinds.map(p=>p.key),u=(p,l)=>p[l>>>5]>>>(l&31)&1;t.font='600 12px "Figtree", system-ui, sans-serif',t.textAlign="left",t.textBaseline="alphabetic",t.fillStyle="rgba(236,234,248,0.92)";let m=o.ns>0;t.fillText(m?`Guest genome: ${Se(o.gs)} of 3,033 genes left`:"Guest genome: no guests yet (the 3,033 genes of a free-living bacterium)",a.pad,19);let d=a.size;for(let p=0;p<n.genes.length;p++){let l=a.at[p],g=A[h[l.kind]],w=m&&u(r.sym,p),y=m&&u(r.nuc,p);if(!m)t.fillStyle=I(g,.22),t.fillRect(l.x,l.y,d,d);else if(w){if(t.fillStyle=I(g,.92),t.fillRect(l.x,l.y,d,d),y&&d>=3){t.fillStyle="rgba(255,255,255,0.95)";let k=Math.max(1,d*.4);t.fillRect(l.x+(d-k)/2,l.y+(d-k)/2,k,k)}}else y?(t.strokeStyle=I(g,.9),t.lineWidth=1,t.strokeRect(l.x+.5,l.y+.5,d-1,d-1)):(t.fillStyle=I(g,.07),t.fillRect(l.x,l.y,d,d))}let i=a.bottomY+8,f=this.hostBar(i);this.particles=this.particles.filter(p=>e-p.t<p.dur);for(let p of this.particles){let l=(e-p.t)/p.dur,g=A[h[a.at[p.g].kind]];if(p.kind==="lose"){t.fillStyle=I([255,255,255],.8*(1-l));let w=d+4*l;t.fillRect(p.x+d/2-w/2,p.y+d/2-w/2,w,w)}else{let w=f.bactX+f.bactW*D(p.g,5),y=f.y+f.h/2,k=l*l*(3-2*l),P=(p.x+w)/2+30*(D(p.g,6)-.5),T=Math.min(p.y,y)-20,G=(1-k)*(1-k)*p.x+2*(1-k)*k*P+k*k*w,H=(1-k)*(1-k)*p.y+2*(1-k)*k*T+k*k*y;t.fillStyle=I(g,.95),t.beginPath(),t.arc(G+1,H+1,2.2,0,Math.PI*2),t.fill()}}}hostBar(e){let t=this.ctx,{W:n}=this,o=this.h,a=12,r=o.arch+o.bact+o.modGenes+o.extra+o.junk,h=Math.max(24e3,r),u=n-2*a;t.font='600 12px "Figtree", system-ui, sans-serif',t.textAlign="left",t.textBaseline="alphabetic",t.fillStyle="rgba(236,234,248,0.92)",t.fillText(`Host genome: ${Se(o.gh)} genes`,a,e+10),t.textAlign="right",t.font='500 10.5px "Figtree", system-ui, sans-serif',t.fillStyle="rgba(236,234,248,0.66)",t.fillText(`bar: 0 to ${Se(h)}`,n-a,e+10);let m=e+16,d=12;t.fillStyle="rgba(255,255,255,0.05)",t.fillRect(a,m,u,d);let i=[["arch",o.arch,"archaeal"],["guest",o.bact,"from guests"],["er",o.modGenes,"features"],["extra",o.extra,"other new"],["junk",o.junk,"broken copies"]],f=a,p=a,l=1;for(let[T,G,H]of i){let x=G/h*u;t.fillStyle=I(A[T],T==="junk"?.9:.88),t.fillRect(f,m,Math.max(0,x),d),T==="guest"&&(p=f,l=Math.max(2,x)),f+=x}t.font='500 10.5px "Figtree", system-ui, sans-serif',t.textAlign="left";let g=a,w=m+d+13;for(let[T,G,H]of i){let x=`${Se(G)} ${H}`,M=t.measureText(x).width+22;g+M>n-a&&(g=a,w+=14),t.fillStyle=I(A[T],1),t.fillRect(g,w-8,8,8),t.fillStyle="rgba(236,234,248,0.8)",t.fillText(x,g+11,w),g+=M}let y=w+12,k=Ht.length,P=(n-2*a)/k;t.font='500 9.5px "Figtree", system-ui, sans-serif';for(let T=0;T<k;T++){let G=a+T*P,H=o.mods[T];t.fillStyle="rgba(255,255,255,0.08)",t.fillRect(G,y,P-6,4);let x=H>=.95;t.fillStyle=I(x?A.er:A.extra,x?1:.8),t.fillRect(G,y,(P-6)*H,4),t.fillStyle=x?"rgba(244,242,255,0.95)":"rgba(236,234,248,0.6)",t.fillText(Ht[T],G,y+15)}return{y:m,h:d,bactX:p,bactW:l}}geneAt(e,t){if(this.view!=="genes"||!this.grid||!this.geometry)return null;let{at:n,p:o}=this.grid,a=null,r=(o*.9)**2;for(let y=0;y<n.length;y++){let k=n[y],P=k.x+o/2-e,T=k.y+o/2-t,G=P*P+T*T;G<r&&(r=G,a=y)}if(a===null)return null;let[h,u,m,d,i]=this.geometry.genes[a],f=this.frame?.typical,p=y=>y?y[a>>>5]>>>(a&31)&1:0,l=this.h?.ns>0,g=l&&p(f?.sym),w=l&&p(f?.nuc);return{index:a,name:h,kind:this.geometry.kinds[u],tm:m,corr:d,prot:i,inSym:g,inNuc:w,guests:l}}drawEnergy(){let e=this.ctx,{W:t,H:n}=this,o=this.h,a=14,r=t-2*a,h=(N,V,F,j=11,ne=500,q="rgba(236,234,248,0.85)",U="left")=>{e.font=`${ne} ${j}px "Figtree", system-ui, sans-serif`,e.textAlign=U,e.textBaseline="alphabetic",e.fillStyle=q,e.fillText(N,V,F)},u=N=>`${N>=.095?Math.round(N*100):Math.round(N*1e3)/10} %`,m=n>300,d=m?16:12,i=n-58,f=m?48:42,p=ue((i-44-f)/3+8,42,96);h("A typical cell’s day, in ATP",a,20,12.5,700,"rgba(244,242,255,0.95)"),h(`divides every ${Ws(o.doubling)}`,t-a,20,11.5,500,"rgba(236,234,248,0.75)","right");let l=Math.max(1,o.food),g=(N,V,F,j,ne)=>{h(V,a,N,11.5,700,"rgba(244,242,255,0.92)"),ne&&h(ne,t-a,N,10.5,500,"rgba(236,234,248,0.68)","right");let q=N+5;e.fillStyle="rgba(255,255,255,0.06)",e.fillRect(a,q,r,d);let U=a;for(let Z of F){let he=Math.max(0,Z.v/j*r);if(e.fillStyle=I(Z.c,Z.a??.9),e.fillRect(U,q,he,d),Z.hatch&&he>3){e.save(),e.beginPath(),e.rect(U,q,he,d),e.clip(),e.strokeStyle="rgba(5,6,12,0.55)",e.lineWidth=1.4;for(let fe=-d;fe<he;fe+=5)e.beginPath(),e.moveTo(U+fe,q+d),e.lineTo(U+fe+d,q),e.stroke();e.restore()}U+=he}e.font='500 10.5px "Figtree", system-ui, sans-serif';let oe=a,Me=q+d+13;for(let Z of F){if(!(Z.v>0)||!Z.label)continue;let he=`${Z.label} ${u(Z.v/j)}`,fe=e.measureText(he).width+20;oe+fe>t-a&&(oe=a,Me+=13),e.fillStyle=I(Z.c,1),e.fillRect(oe,Me-8,7,7),e.fillStyle="rgba(236,234,248,0.82)",e.textAlign="left",e.fillText(he,oe+10,Me),oe+=fe}return Me},w=f,y=g(w,"Food taken in",[{v:o.foodSurface,c:A.arch,label:"through the surface"},{v:o.foodEndo,c:A.er,label:"inner membranes"},{v:o.foodPhago,c:A.guest,label:"eaten whole"}],l,`${Vs(o.food)} ATP if fully burnt`),k=o.ns>0?o.atpShare:0,P=Math.max(0,l-o.ferm-o.resp);w=Math.max(y+30,w+p),y=g(w,"ATP made",[{v:o.ferm,c:A.arch,label:"host ferments"},{v:k*o.resp,c:A.mito,label:"guests hand over"},{v:(1-k)*o.resp,c:A.mito,a:.5,hatch:!0,label:"guests keep"},{v:P,c:A.food,a:.35,label:"not burnt"}],l,o.ns>0?`the host gets ${u(k)} of its guests’ ATP`:"no guests");let T=o.ferm+k*o.resp,G=o.hostPower,H=Math.max(0,T-G),x=Math.max(0,o.upkeepHost-o.upkeepGenes),M=Number.isFinite(o.doubling)&&o.doubling>0?Math.LN2/o.doubling*(o.buildHost/Math.LN2):0,S=Math.max(0,G-o.upkeepHost-M),E=Math.max(T,x+o.upkeepGenes+M+H+S,1);w=Math.max(y+30,w+p),y=g(w,"Where the host’s ATP goes",[{v:x,c:A.extra,label:"upkeep"},{v:o.upkeepGenes,c:A.dna,label:`genes${o.copies>1.05?` (${o.copies<10?o.copies.toFixed(1):Se(o.copies)} copies)`:""}`},{v:H,c:A.food,a:.45,label:"lost"},{v:M,c:A.guest,label:"growth"},{v:S,c:A.mito,a:.35,hatch:!0,label:"held back by the guests"}],E,null),this.ruler(Math.max(y+40,i),a,r)}ruler(e,t,n){let o=this.ctx,a=this.h,r=-3,h=6,u=d=>t+(Math.log10(Math.max(d,10**r))-r)/(h-r)*n;o.font='700 11.5px "Figtree", system-ui, sans-serif',o.textAlign="left",o.textBaseline="alphabetic",o.fillStyle="rgba(244,242,255,0.92)",o.fillText("Power per gene, × the bacterium",t,e-14),o.fillStyle=I(A.mito,.18),o.fillRect(u(1e4),e-8,u(1e5)-u(1e4),16),o.strokeStyle="rgba(236,234,248,0.5)",o.lineWidth=1,o.beginPath(),o.moveTo(t,e+.5),o.lineTo(t+n,e+.5),o.stroke(),o.font='500 9.5px "JetBrains Mono", ui-monospace, monospace',o.fillStyle="rgba(236,234,248,0.6)",o.textAlign="center";for(let d=r;d<=h;d++){let i=Math.round(u(10**d))+.5;o.beginPath(),o.moveTo(i,e-3),o.lineTo(i,e+3),o.stroke(),d%3===0&&o.fillText(d===0?"1":d===3?"1,000":`10${d<0?"⁻³":"⁶"}`,i,e+14)}let m=(d,i,f,p)=>{let l=u(d);o.fillStyle=I(f,1),o.beginPath(),o.moveTo(l,e-1),o.lineTo(l-4,e-8),o.lineTo(l+4,e-8),o.closePath(),o.fill(),i&&(o.font='600 10px "Figtree", system-ui, sans-serif',o.textAlign=l<t+40?"left":l>t+n-40?"right":"center",o.fillText(i,l,e-11))};this.first&&m(this.first.perGeneRel,"",A.arch,!0),m(1,"",A.guest,!0),m(a.perGeneRel,`this cell ×${Hs(a.perGeneRel)}`,[255,255,255],!0),o.font='500 9.5px "Figtree", system-ui, sans-serif',o.fillStyle=I(A.mito,.9),o.textAlign="center",o.fillText("eukaryotes",(u(1e4)+u(1e5))/2,e+14)}};function _t(s,e,t,n,o){s.fillStyle="rgba(5,6,12,0.8)",s.beginPath(),s.roundRect?s.roundRect(e,t,n,o,5):s.rect(e,t,n,o),s.fill()}function qt(s,e,t){let n=t/2,o=Math.max(0,e/2-n);s.beginPath(),s.moveTo(-o,-n),s.lineTo(o,-n),s.arc(o,0,n,-Math.PI/2,Math.PI/2),s.lineTo(-o,n),s.arc(-o,0,n,Math.PI/2,3*Math.PI/2),s.closePath()}function Ws(s){return Number.isFinite(s)?s>=1?`${s<10?s.toFixed(1):Math.round(s)} days`:`${(s*24).toFixed(s*24<10?1:0)} hours`:"never"}function Hs(s){return s>=100?Se(Number(s.toPrecision(2))):s>=1?String(Number(s.toPrecision(2))):String(Number(s.toPrecision(1)))}function Vs(s){let e=Math.floor(Math.log10(s)),t=(s/10**e).toFixed(1).replace(/\.0$/,""),n={"-":"⁻",0:"⁰",1:"¹",2:"²",3:"³",4:"⁴",5:"⁵",6:"⁶",7:"⁷",8:"⁸",9:"⁹"};return`${t}×10${String(e).replace(/./g,o=>n[o]??o)}`}function Bs(s,e,t,n,o){let a=Math.round(Math.log10(e));if(a>=-2&&a<=4){s.fillText(e>=1?Math.round(e).toLocaleString("en-US"):String(e),t,n);return}let r=`${o}px "JetBrains Mono", ui-monospace, monospace`,h=`${o-2.5}px "JetBrains Mono", ui-monospace, monospace`,u=String(a).replace("-","−");s.font=h;let m=s.measureText(u).width;s.fillText(u,t,n-4),s.font=r,s.fillText("10",t-m-.5,n)}var Ut=[{id:"gs",title:"Genes in the guest genome",log:!0,min:10,max:4e3,ticks:[10,100,1e3],series:[{key:"gs",color:"mito",width:2,when:s=>s.ns>0}],bands:[{from:10,to:100,label:"real mitochondria"}],hlines:[{y:600,label:"Buchnera"}]},{id:"gh",title:"Genes in the host genome",min:0,max:2e4,ticks:[0,1e4,2e4],series:[{key:"gh",color:"dna",width:2}],bands:[{from:6e3,to:2e4,label:"free-living protists"}]},{id:"V",title:"Cell volume, µm³",log:!0,min:.01,max:1e5,ticks:[.01,1,100,1e4],series:[{key:"V",color:"arch",width:2}],hlines:[{y:1,label:"the bacterium"}]},{id:"ppg",title:"Power per gene, × the bacterium",log:!0,min:.001,max:1e6,ticks:[.001,1,1e3,1e6],series:[{key:"perGeneRel",color:"mito",width:2}],bands:[{from:1e4,to:1e5,label:"eukaryotes (Lane & Martin)"}],hlines:[{y:1,label:"bacterium"}]},{id:"dbl",title:"Divides every, days",log:!0,min:.1,max:50,ticks:[.1,1,10],series:[{key:"doubling",color:"ink",width:1.8}],bands:[{from:14,to:25,label:"Imachi’s archaeon"}]}],Kt=[{label:"Guests",value:s=>s.share,color:"guest"},{label:"Import",value:s=>s.mods[0],color:"feature"},{label:"Carrier",value:s=>s.mods[1],color:"feature"},{label:"Nucleus",value:s=>s.mods[2],color:"feature"},{label:"ER",value:s=>s.mods[3],color:"feature"},{label:"Skeleton",value:s=>s.mods[4],color:"feature"},{label:"Eating",value:s=>s.mods[5],color:"feature"},{label:"Sex",value:s=>s.mods[6],color:"feature"}],B={left:52,right:10,title:17,gap:8,strip:8,stripGap:2,axis:22},Ue=class{constructor(e){this.canvas=e,this.ctx=e.getContext("2d"),this.points=[],this.end=3e5,this.cursor=null,this.W=0,this.H=0}setRange(e){this.end=e}resize(){let e=this.canvas.getBoundingClientRect(),t=Math.min(2,window.devicePixelRatio||1);this.W=Math.max(1,e.width),this.H=Math.max(1,e.height),this.canvas.width=Math.round(this.W*t),this.canvas.height=Math.round(this.H*t),this.ctx.setTransform(t,0,0,t,0,0);let n=Ut.length,o=Kt.length*(B.strip+B.stripGap)+10,a=(this.H-o-B.axis)/n,r=a-B.title-B.gap;this.boxes=Ut.map((h,u)=>({panel:h,y:u*a+B.title,h:r})),this.stripY=n*a+4}x(e){return B.left+e/this.end*(this.W-B.left-B.right)}genAt(e){let t=(e-B.left)/(this.W-B.left-B.right);return Math.min(1,Math.max(0,t))*this.end}pointAt(e){let t=this.points;if(!t.length)return null;let n=t.length>1&&t[1].gen-t[0].gen||100,o=Math.round((e-t[0].gen)/n);return t[Math.min(t.length-1,Math.max(0,o))]}draw(e){let t=this.ctx,{W:n,H:o}=this;if(!this.boxes)return;t.clearRect(0,0,n,o);let a=this.points,r=B.left,h=n-B.right,u=(l,g=400)=>`${g} ${l}px "Figtree", system-ui, sans-serif`,m=l=>`${l}px "JetBrains Mono", ui-monospace, monospace`;for(let l of this.boxes){let g=l.panel,w=y=>{let k=g.log?(Math.log10(Math.max(y,g.min))-Math.log10(g.min))/(Math.log10(g.max)-Math.log10(g.min)):(y-g.min)/(g.max-g.min);return l.y+l.h-Math.min(1,Math.max(0,k))*l.h};t.fillStyle=e.plot,t.fillRect(r,l.y,h-r,l.h);for(let y of g.bands??[]){let k=w(Math.min(y.to,g.max)),P=w(Math.max(y.from,g.min));t.fillStyle=e.ref,t.fillRect(r,k,h-r,P-k),t.fillStyle=e.ink3,t.font=u(9.5),t.textAlign="right",t.textBaseline="top",t.fillText(y.label,h-4,k+2)}t.strokeStyle=e.line,t.lineWidth=1,t.font=m(9.5),t.textAlign="right",t.textBaseline="middle";for(let y of g.ticks){let k=Math.round(w(y))+.5;t.beginPath(),t.moveTo(r,k),t.lineTo(h,k),t.stroke(),t.fillStyle=e.ink3,g.log?Bs(t,y,r-5,k,9.5):t.fillText(y.toLocaleString("en-US"),r-5,k)}for(let y of g.hlines??[]){let k=Math.round(w(y.y))+.5;t.setLineDash([3,3]),t.strokeStyle=e.ink3,t.beginPath(),t.moveTo(r,k),t.lineTo(h,k),t.stroke(),t.setLineDash([]),t.fillStyle=e.ink3,t.font=u(9.5),t.textAlign="left",t.textBaseline="bottom",t.fillText(y.label,r+4,k-1)}t.save(),t.beginPath(),t.rect(r,l.y,h-r,l.h),t.clip();for(let y of g.series){if(!a.length)continue;t.beginPath();let k=-1,P=!1;a.forEach((T,G)=>{if(!((!y.when||y.when(T))&&Number.isFinite(T[y.key]))){P=!1;return}let x=this.x(T.gen);if(P&&x-k<.5&&G<a.length-1)return;k=x;let M=w(T[y.key]);P?t.lineTo(x,M):t.moveTo(x,M),P=!0}),t.strokeStyle=e[y.color],t.lineWidth=y.width??1.6,t.lineJoin="round",t.stroke()}t.restore(),t.font=u(11.5,700),t.textAlign="left",t.textBaseline="alphabetic",t.fillStyle=e.ink2,t.fillText(g.title,r,l.y-5)}let d=this.stripY;for(let l of Kt){t.fillStyle=e.plot,t.fillRect(r,d,h-r,B.strip);let g=e[l.color],w=-1;for(let y=0;y<a.length;y++){let k=a[y],P=this.x(k.gen);if(P-w<1&&y<a.length-1)continue;let T=l.value(k);if(T>.01){t.globalAlpha=T>=.95?1:.15+.5*T,t.fillStyle=g;let G=y<a.length-1?this.x(a[y+1].gen):P+1;t.fillRect(P,d,Math.max(1,G-P+.5),B.strip)}w=P}t.globalAlpha=1,t.fillStyle=e.ink3,t.font=u(9.5),t.textAlign="right",t.textBaseline="middle",t.fillText(l.label,r-5,d+B.strip/2),d+=B.strip+B.stripGap}let i=d+4;t.strokeStyle=e.ink3,t.fillStyle=e.ink3,t.font=m(10),t.textAlign="center",t.textBaseline="top";let f=n<560?1e5:5e4;for(let l=0;l<=this.end;l+=25e3){let g=Math.round(this.x(l))+.5;if(t.beginPath(),t.moveTo(g,i-4),t.lineTo(g,i),t.stroke(),l>0&&l%f===0){let w=`${l/1e3}k`;t.fillText(w,Math.min(g,n-1-t.measureText(w).width/2),i+2)}}t.textAlign="right",t.font=u(9.5),t.fillText("generations",r+3,i+2);let p=d-B.stripGap;if(a.length){let l=Math.round(this.x(a[a.length-1].gen))+.5;t.strokeStyle=e.ink2,t.setLineDash([2,3]),t.beginPath(),t.moveTo(l,this.boxes[0].y),t.lineTo(l,p),t.stroke(),t.setLineDash([])}if(this.cursor!==null&&a.length){let l=Math.round(this.x(this.cursor))+.5;t.strokeStyle=e.ink,t.lineWidth=1,t.beginPath(),t.moveTo(l,this.boxes[0].y),t.lineTo(l,p),t.stroke()}}};var Fs={"-":"⁻",0:"⁰",1:"¹",2:"²",3:"³",4:"⁴",5:"⁵",6:"⁶",7:"⁷",8:"⁸",9:"⁹"},zs=s=>String(s).replace(/./g,e=>Fs[e]??e),Ke=s=>s.replace(/^-/,"−");function ht(s,e=1,t=!1){if(!Number.isFinite(s))return"–";if(s===0)return"0";let n=Math.floor(Math.log10(Math.abs(s))),o=(s/10**n).toFixed(e);return Math.abs(Number(o))>=10&&(n+=1,o=(s/10**n).toFixed(e)),o=o.replace(/\.0+$/,""),Ke(t?`${o}×10<sup>${Ke(String(n))}</sup>`:`${o}×10${zs(n)}`)}function z(s,e=2,t=!1){if(!Number.isFinite(s))return"–";if(s===0)return"0";let n=Math.abs(s);if(n>=1e7||n<.001)return ht(s,1,t);let o=Math.floor(Math.log10(n)),a=Number(s.toPrecision(e));return Ke(a.toLocaleString("en-US",{maximumFractionDigits:Math.max(0,e-1-o)}))}var C=s=>Number.isFinite(s)?Ke(Math.round(s).toLocaleString("en-US")):"–",Re=(s,e=!1)=>`×${z(s,2,e)}`,we=(s,e=!1)=>`${z(s,2,e)} µm³`,js=s=>Math.cbrt(6*s/Math.PI),ct=s=>{let e=js(s);return`${z(e,(e<10,2))} µm`};function ke(s){if(!Number.isFinite(s))return"never";if(s>=2)return`${z(s,2)} days`;if(s>=1)return`${z(s,2)} day${s>=1.05?"s":""}`;let e=s*24;return e>=1?`${z(e,2)} hours`:`${z(e*60,2)} minutes`}var De=s=>`${z(s*100,2)} %`;function Ye(s){return String(s).replace(/[&<>"]/g,e=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[e])}var re=[{id:"partners",title:"Two partners in the mud",body:["Roughly two billion years ago, every living thing was made of small cells without a nucleus: bacteria and archaea. Somewhere in the mud of the sea floor, an archaeon took a bacterium inside itself. Its descendants became the first [eukaryotes|eukaryote], the kind of cell every animal, plant and fungus is made of.","The host was an [Asgard archaeon|asgard]. In 2020, after twelve years of patient work, a team in Japan led by Hiroyuki Imachi grew one in the lab for the first time. It is tiny, about half a [micrometre|um] across. It divides only once every two to three weeks, living on amino acids together with partner microbes that eat its waste ([syntrophy]).","It also grows long, branching [protrusions]. Imachi’s team suggested that arms like these could wrap around a partner and one day close around it: their [E3 model|e3]."],predict:{q:"Imachi’s archaeon divides once every two to three weeks. Why so slowly?",options:[{text:"It lives on a trickle of energy: fermenting amino acids in the mud yields very little ATP",right:!0},{text:"Its genome is too big to copy any faster"},{text:"It needs oxygen, and there is none in the mud"}],explain:"[Fermentation] gets only a small part of the energy in food, and the mud offers little food to begin with. In the model the archaea ferment, helped by partners outside that mop up their hydrogen. A bacterium that can [respire|respiration] the same food divides about fifteen times faster in the same pond."},show:{steps:[{step:20,speed:1}],view:"cells",highlight:"doubling"},look:"The small amber cells are archaea, drawn on a dark field like a fluorescence micrograph. The thin arms are their protrusions, and the dots stuck to them are partner microbes. Tap any number under the picture to see what it means."},{id:"inside",title:"A cell inside a cell",body:["Now and then, in the model, an archaeon’s arms close around a partner: an [alphaproteobacterium], a bacterium that can [respire|respiration], burning food with oxygen. The bacterium divides once inside, and the archaeon carries on with guests in its cytoplasm. Biologists call such guests [endosymbionts|endosymbiont].","At first this is a fragile arrangement. The guests divide on their own schedule, and when the host divides, a daughter that gets none of them is a plain archaeon again. Most early mergers die out this way."],predict:{q:"The archaeon now holds bacteria that burn food far better than it can. Does it get their energy?",options:[{text:"Yes, at once: their ATP spills into the host"},{text:"Hardly: it gets help with its waste, but the bacteria keep their ATP",right:!0},{text:"No: the bacteria make the host sick"}],explain:"[ATP] made inside the guests stays there, because nothing carries it across their membranes. What the host gains at first is help with its waste: in the model the guests use up the hydrogen and oxygen that slow its fermentation, so it grows a little faster, and its descendants slowly win. This matches the picture Imachi’s team drew, with the bacterium first useful as a scavenger."},show:{steps:[{step:90,speed:1}],view:"cells",highlight:"guests",after:"sweep"},look:"Cells with green rods inside are archaea with guests. The narrator and the list under the charts say when the first merger happened and when cells with guests took over."},{id:"transfer",title:"Genes on the move",body:["Guests die, and when one bursts, its DNA can land in the host’s genome. This still happens today: in yeast, a piece of mitochondrial DNA reaches the nucleus about once in every 50,000 cells each generation ([gene transfer|egt]).","Most of these copies are broken fragments, like the [NUMTs|numt] scattered through our own genome. But now and then a whole gene lands. If the host reads it and its protein reaches the guests, the guests no longer need their own copy.","That last part is the hard one. A protein made in the host’s cytoplasm has to get through two membranes into the guest. Only [protein import|import] machinery makes that routine: gates called TOM and TIM, built mostly from new host proteins."],predict:{q:"A guest gene lands in the host genome and is read there. What else does it need to replace the guest’s own copy?",options:[{text:"Nothing: a working gene is a working gene"},{text:"A way for its protein to get back into the guest",right:!0},{text:"A copy of the guest’s ribosome"}],explain:"The protein is made outside the guest, so it has to be carried in. Without import machinery almost every moved gene is useless, and the guest keeps its own copy. In the model the host’s import machinery grows one gene at a time, and each new part lets a little more through."},show:{steps:[{step:430,speed:3}],view:"genes",highlight:"hostGenes",after:"import"},look:"This picture shows the genes of a typical cell. Each square is one of the guest’s 3,033 genes, coloured by what it does, and a white dot marks a gene that also works from the host’s genome. The bar at the bottom is the host genome."},{id:"shrink",title:"Shedding baggage",body:["Inside a host, a guest no longer needs to swim, to sense the water around it, to defend itself, or to make building blocks the host can hand over. Those genes are lost first.","Losing genes pays: a guest with a smaller genome copies itself faster and outgrows the other guests in the same cell. Genes it still needs can go too, but only once the host makes them instead. So the guest genome shrinks in two stages: first what is useless, then what has moved to the host.","In the model a deletion removes a run of neighbouring genes, as in real chromosomes. A needed gene stuck between useless ones slows the shrinking down."],predict:{q:"Which genes does the guest lose first?",options:[{text:"Genes for swimming, sensing and living outside",right:!0},{text:"Genes for its ribosomes"},{text:"Genes for respiration"}],explain:"Genes that do nothing inside a host go first, often in big chunks. Ribosome and respiration genes are still needed, and can go only once the host makes their proteins and imports them. Bacteria living inside insect cells, like [Buchnera], went through the same first stage and stopped there, with a few hundred genes."},show:{steps:[{step:480,speed:3}],view:"genes",highlight:"guestGenes",after:"outside"},look:"The big grey block of genes for living outside is mostly gone. The coloured blocks of genes the guest still needs are nearly full."},{id:"atp",title:"Tapping the power",body:["ATP made inside the guests is of no use to the host unless something carries it out. Mitochondria today hand their ATP over through the [ADP/ATP carrier|aac], a protein in their inner membrane that swaps the cell’s spent ADP for fresh ATP.","The carrier is not a bacterial protein. It belongs to a family found only in eukaryotes, so the host must have invented it, and it can only work where the host already imports proteins into its guests.","Once the carrier spreads, the guests have become [mitochondria|mitochondrion]. They burn the food the host takes in, and the host gets most of the ATP."],predict:{q:"Once the host taps its guests’ ATP, what happens to the cells?",options:[{text:"They stay the same size but divide faster"},{text:"They grow far bigger, with mitochondria powering every part of the cell",right:!0},{text:"They shrink to save energy"}],explain:"With mitochondria spread through the cytoplasm, every part of a big cell has a power supply close by. In the default run the cells grow from a fraction of a cubic micrometre to thousands of times a bacterium’s volume in about twelve thousand generations. To get that big they also need a [cytoskeleton] and inner membranes, which evolve alongside."},show:{steps:[{step:700,speed:2}],view:"energy",highlight:"size",after:"aac"},look:"This picture is the energy budget of a typical cell. Watch how much of the guests’ ATP reaches the host, and how big the cell is next to a bacterium."},{id:"perGene",title:"Energy per gene",body:["Why did this one merger lead to complex cells, when bacteria and archaea stayed simple for billions of years? Nick Lane and Bill Martin argued in 2010 that it comes down to [energy per gene|power].","A bacterium makes its ATP with its outer membrane. To grow bigger it needs more membrane, and each patch of membrane needs genes nearby to make and repair its proteins, so a big bacterium carries many [copies of its whole genome|polyploid]. The giant bacterium [Epulopiscium] holds up to hundreds of thousands. Copying and running them all eats up the extra energy.","A eukaryote keeps its power plants inside, each with a tiny genome of its own, and needs only one copy of its big genome. Lane and Martin estimated that this gives eukaryotes four to five orders of magnitude more energy per gene.","Not everyone agrees. Michael Lynch and Georgi Marinov argued in 2017 that bigger cells simply have more of everything, and that per unit of volume, eukaryotes are not special. The model follows Lane and Martin."],predict:{q:"A bacterium grows to a thousand times its normal volume. How many copies of its genome does it need?",options:[{text:"Just one, like us"},{text:"Hundreds or more: one for each patch of membrane it powers",right:!0},{text:"None at all"}],explain:"Each patch of energy-making membrane needs genes close at hand, so giant bacteria carry very many genomes. In the model a cell that powers itself with its own membrane needs one genome copy per cubic micrometre, and every copy has to be kept up and copied at each division. Mitochondria free the host from this."},show:{steps:[{step:760,speed:2}],view:"energy",highlight:"perGene",after:"big"},look:"The ruler at the bottom of the picture shows power per gene, with each mark ten times the last. The free-living bacterium sits at ×1."},{id:"nucleus",title:"Building a eukaryote",body:["With energy to spare, the host can afford thousands of new genes. In the model they build the eukaryotic toolkit part by part: inner membranes (the [endoplasmic reticulum|er] and Golgi), a [cytoskeleton] that holds a big cell in shape and moves things across it, [phagocytosis] for eating other cells whole, a [nucleus], and [sex].","Why a nucleus? One idea comes from Bill Martin and Eugene Koonin (2006). The guests’ DNA brought [introns|intron] with it: stretches that must be cut out of a gene’s message before the protein is made. In a cell without a nucleus, ribosomes start reading a message while it is still being made, before the introns are out. A nuclear envelope keeps the ribosomes away until the cutting is done.","In the model, introns spread through the host genome and spoil proteins until the nucleus is complete."],predict:{q:"Introns arrive with the guests’ DNA and spread through the host genome. What does a cell need to live with them?",options:[{text:"Nothing: introns are harmless"},{text:"A way to keep ribosomes off a message until its introns are cut out",right:!0},{text:"More ribosomes"}],explain:"Each intron left in a message spoils the protein made from it. Cutting introns out takes time, and a nuclear envelope keeps the ribosomes away until it is done. Whether this is really why the nucleus evolved is still debated, but the last common ancestor of all living eukaryotes already had both a nucleus and a [spliceosome]."},show:{steps:[{step:900,speed:2}],view:"cells",highlight:"hostGenes",after:"nucleus"},look:"The cells are big now, with a blue nucleus, folds of inner membrane and orange mitochondria. The coloured strips at the bottom of the charts show when each part was finished."},{id:"last",title:"Down to a few dozen genes",body:["Genes keep moving for hundreds of thousands of generations. Our own mitochondria keep just 37: 13 for proteins of the respiratory chain and ATP synthase, 2 for ribosomal RNA and 22 for transfer RNA. The richest mitochondrial genome known, in the protist Andalucia godoyi, has 100.","Why keep any? Two reasons, both built into the model. Some proteins are so oily, with so many [helices|helix] buried in the membrane, that they are very hard to import: these are the core of the respiratory chain. And by John Allen’s [CoRR|corr] idea, a mitochondrion has to make those core proteins itself, on the spot, to keep its own respiration in balance."],predict:{q:"Which genes are the last to stay in the mitochondria?",options:[{text:"Genes for oily membrane proteins at the heart of respiration",right:!0},{text:"Genes for the ribosome’s proteins"},{text:"Whichever genes chance happened to leave"}],explain:"Across eukaryotes, cox1 and cob, subunits of complexes IV and III, are almost always kept, along with other membrane-bound subunits. Many lineages moved their ribosomal protein genes. Chance plays a part too: different lineages kept different sets, and so do different runs of the model."},show:{steps:[{step:3e3,speed:3}],view:"genes",highlight:"guestGenes",after:"g100"},look:"Only a few dozen squares are still lit, mostly red respiration genes and yellow RNA genes. Tap a square to see which gene it is."},{id:"whatif",title:"What if?",body:["The Lab lets you run history again with one piece changed.","No merger: the archaea never take a partner inside. Do they ever become complex on their own?","No protein import: the guests lose what they do not need, then stop shrinking, like the bacteria living in insect cells. The host still builds its other features, but its power per gene stays close to a bacterium’s.","Import anything: every guest protein and RNA can be imported, however oily. Some eukaryotes really have organelles like that: [hydrogenosomes|hydrogenosome] and mitosomes, mitochondria that lost their genome along with respiration."],predict:{q:"If every guest protein could be imported, what would happen to the guest genome?",options:[{text:"It would keep a few dozen genes anyway"},{text:"It would disappear completely",right:!0},{text:"It would grow again"}],explain:"With nothing left that must be made on the spot, every gene can move, and the guest genome goes. In the model this takes about a hundred thousand generations. Real organelles that lost their genome, like hydrogenosomes, also lost the respiratory chain that needs local control."},show:{tab:"lab"}},{id:"unsure",title:"How sure are we?",body:["The broad story is well supported: eukaryotes descend from a merger of an Asgard archaeon and an alphaproteobacterium, and most of the mitochondrion’s genes moved, bit by bit, to the host.","Much else is debated. Did the merger come first and the nucleus and inner membranes later, or did the host already have some of them? Did the partnership start with oxygen, with sulfur, or with hydrogen, as in Martin and Müller’s [hydrogen hypothesis|hydrogen]? Was energy per gene the key, or one factor among several?","The model takes one side on each of these and simplifies the rest. Cells are tracked as numbers, not shapes. Seven features stand for thousands of real genes. And every rate is sped up so the story fits into 300,000 [generations|generation], when the real one may have taken hundreds of millions of years. The Validation tab sets the results beside real numbers and says which ones were tuned."],show:{tab:"check"}}],dt={eukaryote:["Eukaryote","A cell with a nucleus and, almost always, mitochondria. Every animal, plant, fungus and protist is made of eukaryotic cells."],um:["Micrometre (µm)","A thousandth of a millimetre. A typical bacterium is about 1 µm across, and a µm³ is a cube that size."],asgard:["Asgard archaea","A group of archaea, first found as DNA in sea-floor mud in 2015, that carry genes once thought to belong only to eukaryotes. Eukaryotes seem to have branched off from among them. Imachi and colleagues grew the first one in the lab in 2020."],syntrophy:["Syntrophy","“Feeding together”: microbes that live off each other’s waste. Imachi’s archaeon grows only with partners that use up the hydrogen and formate it gives off."],protrusions:["Protrusions","Long, sometimes branching arms that Imachi’s archaeon grows from its surface. Partner microbes stick to them."],e3:["E3 model","Entangle, engulf, endogenize: Imachi and colleagues’ idea that an archaeon’s arms entangled a partner, then engulfed it, and finally made it part of the cell."],fermentation:["Fermentation","Getting energy from food without oxygen, by rearranging it into waste such as hydrogen or acetate. It yields only a small part of the food’s energy: in the model, a tenth."],respiration:["Respiration","Burning food completely, with oxygen, through a chain of proteins in a membrane. It yields many times more ATP than fermentation."],alphaproteobacterium:["Alphaproteobacterium","A member of the group of bacteria that mitochondria come from. Its free-living relatives today have a few thousand genes; the model’s has 3,033."],endosymbiont:["Endosymbiont","An organism living inside another’s cells, usually to the benefit of both. The page calls them guests."],atp:["ATP","Adenosine triphosphate, the energy currency of every cell. Spending it turns it into ADP, which has to be recharged."],egt:["Gene transfer","Endosymbiotic gene transfer: DNA escaping from an endosymbiont and landing in its host’s genome. In yeast it happens about once in every 50,000 cells each generation (Thorsness and Fox, 1990)."],numt:["NUMT","Nuclear mitochondrial DNA: a broken copy of mitochondrial DNA in the nuclear genome. The human genome holds hundreds of them."],import:["Protein import","The machinery, called TOM and TIM, that threads proteins made in the cell’s cytoplasm through the two membranes of a mitochondrion. About 99 % of the proteins in human mitochondria come in this way."],buchnera:["Buchnera","A bacterium living inside the cells of aphids, passed from mother to young for about 200 million years. Its genome has shrunk to about 600 genes, but it has never become an organelle."],aac:["ADP/ATP carrier","A protein in the inner membrane of mitochondria that swaps ADP from the cell for ATP from the mitochondrion. It belongs to a protein family found only in eukaryotes."],mitochondrion:["Mitochondrion","The power plant of a eukaryotic cell: a former bacterium with a small genome of its own, which burns food with oxygen and hands most of the ATP to the cell. Plural: mitochondria."],cytoskeleton:["Cytoskeleton","Fibres of actin and tubulin, with motor proteins running along them, that give a eukaryotic cell its shape, let it move and carry cargo across it. Asgard archaea have simple versions of some of these proteins."],power:["Power per gene","The ATP a cell makes in a day, divided by the number of genes in its genome. Lane and Martin used it to compare cells of very different sizes."],polyploid:["Genome copies","Many prokaryotes carry several copies of their genome, and giant ones tens of thousands or more. Each copy has to be kept up and copied."],epulopiscium:["Epulopiscium","A giant bacterium from the gut of surgeonfish, up to about 0.6 mm long, with tens to hundreds of thousands of copies of its genome."],er:["Endoplasmic reticulum","A network of membranes inside eukaryotic cells where many proteins and lipids are made. With the Golgi and small vesicles it forms the inner membrane system."],phagocytosis:["Phagocytosis","Eating other cells whole by wrapping the cell membrane around them. Amoebae and our white blood cells do it; of all prokaryotes, only one bacterium, found in 2019, is known to do anything like it."],nucleus:["Nucleus","A double membrane with pores around a cell’s DNA. Genes are read and their messages trimmed inside; proteins are made outside."],sex:["Sex","Here: meiosis and cell fusion, which shuffle genomes and help purge broken genes. Nearly all eukaryotes have it, or descend from ancestors that did."],intron:["Intron","A stretch inside a gene that is cut out of its message before the protein is made. Eukaryotic introns probably descend from self-splicing introns brought in by the mitochondrion’s ancestors."],spliceosome:["Spliceosome","The machine that cuts introns out of messages in the nucleus. The last common ancestor of all living eukaryotes already had one."],helix:["Membrane helix","A coil of protein that crosses a membrane. Proteins with many of them are oily and hard to carry into a mitochondrion."],corr:["CoRR","Co-location for redox regulation, John Allen’s idea: a mitochondrion keeps the genes for the core of its respiratory chain so it can make those proteins on the spot, matching its own needs."],hydrogenosome:["Hydrogenosome","An organelle of some protists living without oxygen. It makes ATP and gives off hydrogen, descends from a mitochondrion, and in almost every case has lost its genome. Mitosomes are even further reduced."],hydrogen:["Hydrogen hypothesis","Martin and Müller’s 1998 idea that the host lived on hydrogen its bacterial partner gave off, which drew the two together."],generation:["Generation","One round of cell division. The model counts time in generations; each step is 100 of them."]};function Je(s){return Ye(s).replace(/(\(?)\[([^\]|]+)(?:\|([^\]]+))?\]([)’.,;:!?]*)/g,(e,t,n,o,a)=>{let h=`<button type="button" class="term" data-term="${o??n.toLowerCase()}">${n}</button>`;return t||a?`<span class="nw">${t}${h}${a}</span>`:h})}var ut=[{key:"guestGenes",label:"Guest genes",unit:s=>s.ns>0?"of 3,033 at first":"no guests yet",value:s=>s.ns>0?C(s.gs):"–"},{key:"hostGenes",label:"Host genes",unit:"archaeon: 3,600",value:s=>C(s.gh)},{key:"guests",label:"Guests",unit:"per cell",value:s=>z(s.ns,2,!0)},{key:"size",label:"Cell size",unit:s=>`${ct(s.V)} across`,value:s=>we(s.V,!0)},{key:"doubling",label:"Divides every",short:"Divides every",unit:"Asgard: 14–25 days",value:s=>ke(s.doubling)},{key:"perGene",label:"Power per gene",unit:"bacterium: ×1",value:s=>Re(s.perGeneRel,!0)}],me=(s,e)=>`<button type="button" class="term" data-term="${s}">${e}</button>`;function Jt(s,e){let t=ct(e.V);switch(s){case"guestGenes":{if(e.ns===0)return{title:"The guest genome",value:"No guests yet",html:["The typical cell has no guests yet. When an archaeon takes one in, it is an alphaproteobacterium with 3,033 genes in the model: 3,000 for proteins and 33 for RNA.","Free-living relatives of mitochondria have a few thousand genes. Our own mitochondria have 37."],chart:"gs"};let n=e.gs>1500?"Most of what is left would still be useful to a free-living bacterium. Genes for swimming, sensing and defence are being lost in big chunks.":e.gs>200?`What is left is mostly genes the guests still need: for their ribosomes, their respiratory chain and their metabolism. Each can go only once the host makes the protein and ${me("import","imports")} it.`:`Real mitochondria keep from a handful of genes to 100, and ours keep 37. What stays is mostly the oily core of the respiratory chain and the RNAs the guests’ own ribosomes need (${me("corr","CoRR")}).`;return{title:"The guest genome",value:`${C(e.gs)} genes`,html:[`The guests in a typical cell share one genome of ${C(e.gs)} genes, ${C(e.gsProt)} of them for proteins. Their ancestor had 3,033.`,n,e.bact>0?`${C(e.bact)} genes that came from the guests now work from the host genome.`:"None of the guests’ genes works from the host genome yet."],chart:"gs"}}case"hostGenes":return{title:"The host genome",value:`${C(e.gh)} genes`,html:[`The host started as an ${me("asgard","Asgard archaeon")} with about 3,600 genes. Now it has ${C(e.gh)}: ${C(e.arch)} archaeal, ${C(e.bact)} taken over from its guests, ${C(e.modGenes)} that build eukaryotic features, and ${C(e.extra)} other new genes made by copying old ones.`,e.junk>0||e.introns>0?`It also carries ${C(e.junk)} broken copies of guest DNA, like the ${me("numt","NUMTs")} in our own genome, and ${C(e.introns)} ${me("intron","introns")}.`:"","Every gene costs energy. It has to be copied at each division, and its protein has to be made and replaced. A bigger genome pays only if the cell has power to spare."],chart:"gh"};case"guests":{let n=e.V>0?e.ns*.03/e.V:0;return{title:"Guests per cell",value:`${z(e.ns,2,!0)}`,html:[e.ns===0?"The typical cell has no guests. Archaea take a partner inside only rarely, and most of these first mergers die out when a daughter cell is left without any.":`A typical cell holds ${z(e.ns,2,!0)} guests, taking up ${De(n)} of its volume.`,e.ns>0&&e.ns<40?"With so few, a daughter cell can easily miss out at division and lose them all. Hosts that can send proteins into their guests keep them in step with their own division.":"",e.ns>=40?"Real cells hold from a few to thousands of mitochondria, often fused into networks. The model’s guests are small, so a big cell holds very many of them. They take up a fifth to a half of the cell, about as in real cells.":"","In the model a cell keeps about as many guests as the leftovers of its food can feed. How many exactly is itself inherited, and evolves."],chart:"V"}}case"size":return{title:"Cell size",value:`${we(e.V,!0)}, ${t} across`,html:[`The typical cell has a volume of ${we(e.V,!0)} and is ${t} across: ${z(e.V,2,!0)} times the volume of the free-living bacterium (1 µm³).`,e.V<1?"Archaea like Imachi’s are tiny, about 0.55 µm across, a tenth of a bacterium’s volume. A small cell has plenty of surface for taking in food, for its volume.":e.V<100?"A bigger cell can take in more food, but must move things further inside it and, without mitochondria, power more membrane and keep more genome copies.":`A cell this big needs power all through its volume, which its mitochondria give it, and a ${me("cytoskeleton","cytoskeleton")} and inner membranes to move things across it. An average protist is about 15,000 times the mass of an average bacterium.`,"In the model, size is inherited and drifts a little each step. Selection keeps the size that grows fastest."],chart:"V"};case"doubling":return{title:"Doubling time",value:ke(e.doubling),html:[`A typical cell divides every ${ke(e.doubling)}. The free-living bacterium in the same pond divides about once a day; Imachi’s archaeon took 14 to 25 days in culture.`,"Cells that divide faster leave more descendants. Each step of the model, 100 generations pass and the 500 cells are drawn again, in proportion to how fast each one grows.",e.ns>0?e.limit==="all"?"Right now the whole cell is the limit: its ATP has to keep up the guests and build new ones as well as the host.":`Right now the host’s own ATP is the limit: it grows on what it ferments plus the share of its guests’ ATP it can get, ${De(e.atpShare)}.`:""],chart:"dbl"};case"perGene":{let n=e.perGeneRel<1;return{title:"Power per gene",value:Re(e.perGeneRel,!0),html:[`The whole cell makes ${ht(e.power,1,!0)} ATP a day. Spread over its ${C(e.gh)} genes, that is ${z(e.perGeneRel,2,!0)} times the ${me("power","power per gene")} of the free-living bacterium.`,n?"Archaea living by fermentation have far less power per gene than a respiring bacterium.":e.perGeneRel>=1e3?"Lane and Martin (2010) estimated that eukaryotes have four to five orders of magnitude more energy per gene than bacteria. That is what lets them afford genomes of 10,000 genes or more.":"More than a bacterium, but still far from the four to five orders of magnitude Lane and Martin estimated for eukaryotes.",`A bacterium cannot catch up by growing: in the model a cell that powers itself with its own membrane needs ${me("polyploid","a genome copy")} for every µm³, and pays for all of them.`],chart:"ppg"}}default:return null}}function Xt(s){let e=(n,o)=>`<button type="button" class="num" data-explain="${n}">${o}</button>`,t=e("guestGenes",C(s.gs));return s.share<.02?`Archaea ferment amino acids in the mud, helped by partners stuck to their arms. Each divides only every ${e("doubling",ke(s.doubling))}.`:s.share<.5?`${e("guests",De(s.share))} of cells carry guests inside. The guests help their hosts ferment a little faster, but are often lost at division.`:s.mods[0]<.999&&s.atpShare<.5?s.mods[0]===0&&s.gs<1100?`Guests live in every cell, but without protein import the host cannot take over their genes. Having shed what it did not need, the guest genome stays at ${t} genes.`:`Guests now live in ${De(s.share)} of cells. Bits of their DNA land in the host genome, but until the host can send proteins back in, almost none of it works. The guest genome has ${t} genes.`:s.atpShare<.5?`The host can send proteins into its guests, and ${e("hostGenes",C(s.bact))} guest genes now work from the host genome. The guests still keep most of their ATP.`:s.V<1e3?`The guests hand over their ATP: they have become mitochondria. With power all through the cell, the cells grow: ${e("size",we(s.V,!0))} now.`:s.gs>=100?`Each cell holds ${e("guests",z(s.ns,2,!0))} mitochondria and ${e("hostGenes",C(s.gh))} genes of its own, with ${e("perGene",`${z(s.perGeneRel,2,!0)} times`)} a bacterium’s power per gene. The mitochondrial genome is still shrinking: ${t} genes.`:s.gs===0?`The guests have lost their genome completely: the host makes and imports everything they need, like the hydrogenosomes of some protists. The host genome has ${e("hostGenes",C(s.gh))} genes.`:`The mitochondrial genome is down to ${t} genes, like real ones (ours has 37). The host genome has ${e("hostGenes",C(s.gh))}.`}var ve=[{key:"cells",label:"Cells",legend:[["arch","archaeal host"],["guest","guest, still a bacterium"],["mito","guest that is now a mitochondrion"],["dna","nucleus"]]},{key:"genes",label:"Genes",legend:[["outside","living outside"],["supply","made by the host"],["metab","metabolism"],["genetic","genetic system"],["resp","respiration"],["membrane","membranes"],["rna","RNA genes"]]},{key:"energy",label:"Energy",legend:[["arch","the host"],["mito","the guests"],["food","food not burnt"]]}],Qt={cells:["A sample of the 500 cells the model follows, drawn on a dark field like a fluorescence micrograph. Each cell keeps its place while its line of descent goes on.","Amber cells are archaea; the thin arms are their protrusions, with partner microbes stuck to them. Rods inside a cell are its guests: green while they are still much like bacteria, then gold, then coral as they become mitochondria. A blue disc is a nucleus, pink folds are inner membranes, faint lines are the cytoskeleton, and rings with a green dot are bacteria being digested.","Sizes are squeezed so that both the tiny archaea and the big cells fit. The circle in the corner shows the typical cell and a bacterium to the same scale."],genes:["The genes of a typical cell. Each square in the grid is one of the 3,033 genes of the guests’ ancestor, grouped and coloured by what it does.","A lit square is a gene the guests still have. A white dot means a working copy is also in the host genome; a hollow square means the gene has moved there for good. A dark square was lost. Tap a square to see what it is.","The bar at the bottom is the host genome, drawn to the same scale throughout the run: archaeal genes, genes from the guests, genes for eukaryotic features, other new genes, and broken copies of guest DNA."],energy:["The energy budget of a typical cell for one day, in ATP. The top bar is the food it takes in, split by how: through its surface, through its inner membranes, or by eating bacteria whole.","The middle bar is the ATP made from that food: by the host’s fermentation, and by the guests’ respiration, of which the host gets only its share. The hatched part is what the guests keep for themselves.","The bottom bar shows where the host’s ATP goes: upkeep of the cell, upkeep of its genes (every copy of them), what is lost to slow transport, introns and broken genes, and growth. A hatched part is ATP the host could spare but cannot grow with, because the cell as a whole, guests included, cannot grow any faster.","The ruler at the bottom compares power per gene, with each mark ten times the last. The amber marker is the archaeon at the start, the green one the free-living bacterium and the white one this cell; the shaded band is what Lane and Martin estimated for eukaryotes."]},Zt=["The model follows 500 cells. Each step stands for 100 generations: cells leave descendants in proportion to how fast they grow, then the descendants mutate. A cell’s growth comes from an energy budget: food taken in through the surface, inner membranes or by eating bacteria, fermented by the host and burnt by its guests, minus the cost of keeping and copying the host, its genes and its guests.","Each cell carries two genomes: the host’s, counted gene by gene in groups, and its guests’, in which all 3,033 genes are tracked one by one. Guest genes are lost in runs of neighbours, copied into the host by chance, and replaced only when the host can import their proteins. Seven eukaryotic features (protein import, the ATP carrier, the nucleus, inner membranes, the cytoskeleton, phagocytosis and sex) each need a set of new host genes, gained one at a time.","It is a toy model. The cells are tracked as numbers, not shapes; seven features stand for thousands of real genes; and mutation rates are sped up hugely so that the whole story fits in 300,000 generations. It shows how the pieces push on each other, not exactly what happened."];var _s=typeof _=="object"?_:null,v=s=>document.getElementById(s),$=Ye,qs=["200 gen/s","600 gen/s","2k gen/s","Fastest"],ss=2,Ie="eve",Pe=window.matchMedia("(min-width: 1040px)"),Us=window.matchMedia("(prefers-reduced-motion: reduce)"),xe=(s,e="start")=>s?.scrollIntoView?.({behavior:Us.matches?"auto":"smooth",block:e}),se={get(s,e){try{let t=window.localStorage.getItem(`euk:${s}`);return t===null?e:JSON.parse(t)}catch{return e}},set(s,e){try{window.localStorage.setItem(`euk:${s}`,JSON.stringify(e))}catch{}}},c={ready:!1,geometry:null,scenarios:{},defaults:{},ranges:{},steps:3e3,G:100,points:[],notes:[],frame:null,params:{},running:!1,done:!1,genome:null,speed:se.get("speed",ss),seed:Ie,scenario:"real",labParams:{},custom:!1,view:se.get("view","cells"),tab:se.get("tab","learn"),chapter:Math.min(re.length-1,se.get("chapter",0)),answers:se.get("answers",{}),show:null,afterReady:null,note:null,narratorHtml:"",dirty:!0,chartsDirty:!0,lastCharts:0,cursor:null,validation:null,checkView:"model"};(!Number.isInteger(c.speed)||c.speed<0||c.speed>3)&&(c.speed=ss);ve.some(s=>s.key===c.view)||(c.view="cells");var ie=new qe(v("scene")),pe=new Ue(v("charts")),Q=null,J=()=>c.points[c.points.length-1],le=()=>J()?J().step:0,Ze=s=>C(s),Ks=s=>s===0?"0":s<1e4?`${(s/1e3).toFixed(1)}k`:`${Math.round(s/1e3)}k`;function Ys(s){switch(s.type){case"ready":{c.ready=!0,c.geometry=s.geometry,c.scenarios=s.scenarios,c.defaults=s.defaults,c.ranges=s.ranges,c.steps=s.steps,c.G=s.G,c.seed=s.seed,c.scenario=s.scenario,c.points=[],c.notes=[],c.note=null,c.done=!1,c.running=!1,c.genome=null,ie.setGeometry(s.geometry),ie.resize(),pe.setRange(s.steps*s.G),pe.cursor=null,c.cursor=null,v("events").innerHTML="",ds();let e=c.afterReady;c.afterReady=null,e&&e();break}case"tick":{c.frame=s.frame;for(let e of s.points)c.points.push(e);for(let e of s.notes)c.notes.push(e),c.note={...e,at:performance.now()},un(e);c.params=s.params,c.running=s.running,c.done=s.frame.done,s.genome&&(c.genome=s.genome),J()&&ie.setFrame(s.frame,J(),c.points[0]),c.dirty=!0,c.chartsDirty=!0;break}case"paused":c.running=!1,c.done=s.done,c.dirty=!0,c.show&&mt(),c.tab==="check"&&We();break;case"error":as(s.message);break;default:break}}function te({seed:s=c.seed,scenario:e=c.scenario,params:t=c.labParams,then:n=null}={}){c.afterReady=n,c.custom=!1,c.labParams={...t},Q.send({type:"init",seed:s,scenario:e,params:c.labParams})}function ns(){if(c.done){te({then:()=>ns()});return}c.show=null,c.running=!0,Q.send({type:"play",speed:c.speed}),c.dirty=!0}function Js(){c.show=null,Q.send({type:"pause"})}function os(s,e=3){s<=le()||c.done||(c.running=!0,Q.send({type:"runTo",step:s,speed:e}),c.dirty=!0)}function Xs(s){let e=s.show;if(e.tab){Ne(e.tab),xe(v("side"));return}e.view&&rs(e.view);let t=e.steps[0].step,n=c.scenario==="real"&&c.seed===Ie&&!c.custom&&!Object.keys(c.labParams).length;c.show={steps:e.steps.slice(),chapter:s},!n||le()>t?te({seed:Ie,scenario:"real",params:{},then:()=>mt()}):mt(),gn(),xe(v("stage")),e.highlight&&Zs(e.highlight)}function mt(){let s=c.show;if(!s)return;for(;s.steps.length&&s.steps[0].step<=le();)s.steps.shift();let e=s.steps.shift();if(!e){c.show=null;let t=document.querySelector(`[data-look="${s.chapter.id}"]`);t&&(t.hidden=!1);return}c.running=!0,Q.send({type:"runTo",step:e.step,speed:e.speed})}function Qs(){Pe.matches||(c.fromLesson=!0,Ne("watch")),requestAnimationFrame(()=>xe(v("charts")))}function Zs(s){let e=document.querySelector(`.readout[data-explain="${s}"]`);e&&(e.classList.remove("flash"),e.offsetWidth,e.classList.add("flash"))}var pt={play:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>',pause:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>',again:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a7 7 0 1 1-6.6 4.7l1.9.7A5 5 0 1 0 12 7v3L7.5 6 12 2z"/></svg>',step:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5.5v13l9-6.5zM16 5h2.6v14H16z"/></svg>'};function en(){v("speed").innerHTML=qs.map((e,t)=>`<option value="${t}">${e}</option>`).join(""),v("speed").value=String(c.speed),v("step").innerHTML=pt.step,v("restart").innerHTML=pt.again,v("play").addEventListener("click",()=>c.running?Js():ns()),v("step").addEventListener("click",()=>{c.show=null,Q.send({type:"step",n:1})}),v("restart").addEventListener("click",()=>te()),v("speed").addEventListener("change",e=>{c.speed=Number(e.target.value),se.set("speed",c.speed),c.running&&!c.show&&Q.send({type:"speed",speed:c.speed})});let s=v("timeline");s.addEventListener("click",e=>{let t=s.getBoundingClientRect(),n=Math.min(1,Math.max(0,(e.clientX-t.left)/t.width)),o=Math.round(n*c.steps);o>le()?(c.show=null,os(o,3),Oe(`Running to generation ${Ze(o*c.G)}`)):Oe("You can only run forward. Restart to go back.")})}function tn(){let s=c.running,e=v("play"),t=s?"pause":c.done?"again":"play";e.dataset.mode!==t&&(e.dataset.mode=t,e.innerHTML=`${pt[t]}<span>${t==="pause"?"Pause":t==="again"?"Again":"Play"}</span>`,e.setAttribute("aria-label",t==="pause"?"Pause":t==="again"?"Run again from the start":"Play")),v("gen").textContent=Ze(le()*c.G);let n=le()/c.steps;v("tl-fill").style.width=`${(n*100).toFixed(2)}%`,v("timeline").setAttribute("aria-valuenow",String(le()*c.G))}function Oe(s){let e=v("toast");e.textContent=s,e.hidden=!1,clearTimeout(Oe.timer),Oe.timer=setTimeout(()=>e.hidden=!0,2600)}function as(s){let e=v("error");e.textContent=`The simulation stopped: ${s.split(`
+`)[0]}`,e.hidden=!1,c.running=!1,c.dirty=!0}function sn(){v("views").innerHTML=ve.map(s=>`<button type="button" class="chip" data-view="${s.key}" aria-pressed="${s.key===c.view}">${$(s.label)}</button>`).join(""),v("views").addEventListener("click",s=>{let e=s.target.closest("[data-view]");e&&rs(e.dataset.view)}),is()}function rs(s){c.view=s,se.set("view",s),ie.setView(s),v("scene-wrap").dataset.view=s;for(let e of document.querySelectorAll("#views [data-view]"))e.setAttribute("aria-pressed",String(e.dataset.view===s));v("scene").setAttribute("aria-label",nn[s]),is(),requestAnimationFrame(et)}var nn={cells:"A sample of the cells, drawn like a fluorescence micrograph",genes:"The genes of a typical cell: the guest genome as a grid of squares and the host genome as a bar",energy:"The energy budget of a typical cell for one day, as bars, and a ruler of power per gene"};function is(){let s=ve.find(t=>t.key===c.view)??ve[0],e=t=>`rgb(${A[t].join(",")})`;v("legend").innerHTML=s.legend.map(([t,n])=>`<span class="key"><i style="background:${e(t)}"></i>${$(n)}</span>`).join("")+(s.key==="genes"?'<span class="key faint">tap a square to name its gene</span>':"")}function on(){v("readouts").innerHTML=ut.map(s=>`<button type="button" class="readout" data-explain="${s.key}">
+      <span class="r-label">${$(s.short??s.label)}</span>
+      <span class="r-value" data-value="${s.key}">–</span>
+      <span class="r-unit" data-unit="${s.key}">${typeof s.unit=="string"?$(s.unit):""}</span></button>`).join("")}function an(){let s=J();if(s)for(let e of ut){let t=document.querySelector(`[data-value="${e.key}"]`),n=e.value(s);if(t&&t.dataset.html!==n&&(t.dataset.html=n,t.innerHTML=n),typeof e.unit=="function"){let o=document.querySelector(`[data-unit="${e.key}"]`),a=e.unit(s);o&&o.textContent!==a&&(o.textContent=a)}}}var ls={merger:"Merger",host:"Host",genes:"Genes",cell:"Cells",lab:"You"};function rn(s){let e=J(),t;e?c.note&&s-c.note.at<7e3&&le()-c.note.step<100?t=`<span class="tag tag-${c.note.kind}">${ls[c.note.kind]??""}</span> ${$(c.note.text)}`:t=Xt(e):t="Filling the pond…",t!==c.narratorHtml&&(c.narratorHtml=t,v("narrator").innerHTML=t)}function ln(){let s=getComputedStyle(document.documentElement),e=t=>s.getPropertyValue(t).trim();return{ink:e("--ink"),ink2:e("--ink-2"),ink3:e("--ink-3"),line:e("--line"),plot:e("--plot"),ref:e("--ref"),mito:e("--mito"),dna:e("--dna"),arch:e("--arch"),guest:e("--guest"),feature:e("--feature")}}var Ce=null;function hn(s){Ce||(Ce=ln()),pe.points=c.points,pe.cursor=c.cursor,pe.draw(Ce),c.chartsDirty=!1,c.lastCharts=s,cn()}function cn(){let s=c.cursor!==null?pe.pointAt(c.cursor):J();if(!s)return;let e=(t,n)=>`<button type="button" class="num" data-explain="${t}" data-step="${s.step}">${n}</button>`;v("chart-caption").innerHTML=`<b>${c.cursor!==null?"At":"Now, at"} generation ${Ze(s.gen)}:</b> guest genome ${e("guestGenes",s.ns>0?`${C(s.gs)} genes`:"none yet")} · host ${e("hostGenes",`${C(s.gh)} genes`)} · cell ${e("size",we(s.V,!0))} · power per gene ${e("perGene",Re(s.perGeneRel,!0))} · divides every ${e("doubling",ke(s.doubling))}`}function dn(){let s=v("charts"),e=t=>{let n=s.getBoundingClientRect(),o=pe.genAt(t.clientX-n.left);c.cursor=c.points.length?Math.min(o,J().gen):null,c.chartsDirty=!0};s.addEventListener("pointermove",t=>{t.pointerType==="mouse"&&e(t)}),s.addEventListener("pointerdown",e),s.addEventListener("pointerleave",t=>{t.pointerType==="mouse"&&(c.cursor=null,c.chartsDirty=!0)})}function un(s){let e=document.createElement("li");e.dataset.gen=String(s.step*c.G),e.innerHTML=`<span class="ev-age">${Ks(s.step*c.G)}</span><span class="tag tag-${s.kind}">${ls[s.kind]??""}</span><span class="ev-text">${$(s.text)}</span>`,v("events").prepend(e)}function Ne(s){s==="watch"&&Pe.matches&&(s="learn"),c.tab=s,se.set("tab",s);for(let e of document.querySelectorAll("[data-tab]")){let t=e.dataset.tab===s;e.setAttribute("aria-selected",String(t)),e.tabIndex=t?0:-1}for(let e of document.querySelectorAll(".panel"))e.classList.toggle("active",e.dataset.panel===s||e.dataset.panel==="watch"&&Pe.matches);v("back-to-lesson").hidden=!(c.fromLesson&&s==="watch"),(s==="watch"||Pe.matches)&&requestAnimationFrame(et),s==="check"&&We()}function es(){let s=v("panel-watch");Pe.matches?v("main-col").appendChild(s):v("side").insertBefore(s,v("panel-learn")),Ne(c.tab),et()}function et(){ie.resize(),c.frame&&J()&&ie.setFrame(c.frame,J(),c.points[0]),pe.resize(),c.chartsDirty=!0}function ft(){let s=re[c.chapter],e=c.chapter,t=c.answers[s.id],n=s.predict,o=n?n.options.map((r,h)=>`<button type="button" class="option${t===void 0?"":r.right?" right":h===t?" wrong":" dim"}" data-option="${h}" ${t!==void 0?'aria-disabled="true"':""}>${$(r.text)}</button>`).join(""):"",a=t===void 0||!n?"":n.options[t]?.right?"Right.":"Not quite.";v("panel-learn").innerHTML=`
+    <div class="chapter-nav">
+      <span class="kicker">Chapter ${e+1} of ${re.length}</span>
+      <div class="dots">${re.map((r,h)=>`<button type="button" class="dot${h===e?" on":""}${c.answers[r.id]!==void 0?" done":""}" data-chapter="${h}" aria-label="Chapter ${h+1}: ${$(r.title)}"></button>`).join("")}</div>
+    </div>
+    <article class="chapter">
+      <h2>${$(s.title)}</h2>
+      ${s.body.map(r=>`<p>${Je(r)}</p>`).join("")}
+      ${n?`<div class="predict">
+        <p class="kicker">Predict first</p>
+        <p class="predict-q">${$(n.q)}</p>
+        <div class="options">${o}</div>
+        <p class="predict-a" ${t===void 0?"hidden":""}><b>${a}</b> ${Je(n.explain)}</p>
+      </div>`:""}
+      <div class="show">
+        <button type="button" class="btn primary" data-show="${e}">${s.show.tab==="lab"?"Open the Lab":s.show.tab==="check"?"Open Validation":"Show me"}</button>
+        ${s.look?`<p class="look" data-look="${s.id}" hidden><b>Look:</b> ${Je(s.look)}</p>`:""}
+      </div>
+    </article>
+    <div class="pager">
+      <button type="button" class="btn ghost" data-chapter="${e-1}" ${e===0?"disabled":""}>← Previous</button>
+      <button type="button" class="btn ghost" data-chapter="${e+1}" ${e===re.length-1?"disabled":""}>Next →</button>
+    </div>
+    <details class="glossary">
+      <summary>Glossary</summary>
+      <dl>${Object.entries(dt).sort((r,h)=>r[1][0].localeCompare(h[1][0])).map(([r,[h,u]])=>`<dt id="term-${r}">${$(h)}</dt><dd>${$(u)}</dd>`).join("")}</dl>
+    </details>`}function mn(){v("panel-learn").addEventListener("click",s=>{let e=s.target.closest("[data-chapter]");if(e&&!e.disabled){let o=Number(e.dataset.chapter);o>=0&&o<re.length&&(c.chapter=o,se.set("chapter",o),ft(),xe(v("panel-learn")));return}let t=s.target.closest("[data-option]");if(t){let o=re[c.chapter];if(c.answers[o.id]!==void 0)return;c.answers[o.id]=Number(t.dataset.option),se.set("answers",c.answers),ft();return}let n=s.target.closest("[data-show]");n&&Xs(re[Number(n.dataset.show)])})}var hs=[{key:"transfer",label:"Guest DNA landing in the host genome",fmt:s=>`× ${s.toFixed(2)}`},{key:"importEase",label:"How easily host-made proteins get into the guests",fmt:s=>`× ${s.toFixed(2)}`},{key:"oxygen",label:"Oxygen for the guests to respire with",fmt:s=>`${Math.round(s*100)} %`},{key:"food",label:"Food in the pond",fmt:s=>`× ${s.toFixed(2)}`},{key:"geneCost",label:"Energy cost of a gene",fmt:s=>`× ${s.toFixed(2)}`}],pn=[{key:"capture",label:"Mergers",note:"archaea can take a partner inside"},{key:"importable",label:"Protein import",note:"the host can evolve a way to send proteins into its guests"},{key:"aac",label:"ATP carrier",note:"the host can evolve the ADP/ATP carrier"},{key:"phago",label:"Phagocytosis",note:"cells can evolve to eat bacteria whole"},{key:"corr",label:"Local control",note:"respiration needs its core genes in the guest (CoRR)"},{key:"anyImport",label:"Import anything",note:"every guest protein can be imported, however oily"}],fn=[{kind:"capture",label:"Put a bacterium inside",note:"One archaeon takes a partner in now."},{kind:"spill",label:"Burst some guests",note:"Their DNA spills into every host genome."},{kind:"aac",label:"Hand out the ATP carrier",note:"Every host gets its genes at once."},{kind:"cure",label:"Cure half the cells",note:"Half the cells lose all their guests."}],cs=!1;function ds(){let s={...c.defaults,...c.scenarios[c.scenario]?.params??{},...c.labParams},e=c.seed!==Ie;v("panel-lab").innerHTML=`
+    <h2>Lab</h2>
+    <p class="lede">Change the rules, then run history again. The same settings and seed always give the same run.</p>
+    <h3>Start from</h3>
+    <div class="scenarios" role="radiogroup">
+      ${Object.entries(c.scenarios).map(([t,n])=>`<button type="button" class="scenario" role="radio" aria-checked="${t===c.scenario}" data-scenario="${t}">
+            <b>${$(n.label)}</b><span>${$(n.blurb)}</span></button>`).join("")}
+    </div>
+    <h3>Chance</h3>
+    <p class="hint">Which archaea take a partner in, which genes are lost and which land in the host all come from a seed.</p>
+    <div class="seed-row">
+      <button type="button" class="chip" data-seedmode="default" aria-pressed="${!e}">The default run</button>
+      <button type="button" class="chip" data-seedmode="random" aria-pressed="${e}">Another seed</button>
+      <label class="seed-field" ${e?"":"hidden"}><span>Seed</span><input id="seed" type="text" value="${e?$(c.seed):""}" maxlength="16" autocomplete="off"></label>
+      <button type="button" class="btn ghost small" data-newseed ${e?"":"hidden"}>New seed</button>
+    </div>
+    <h3>Change the rules</h3>
+    <p class="hint">Changes work from now on. Press Restart to run the whole history with them.</p>
+    <div class="sliders">
+      ${hs.map(t=>{let n=c.ranges[t.key];return`<label class="slider"><span class="s-label">${$(t.label)}</span><output data-out="${t.key}">${$(t.fmt(s[t.key]))}</output>
+          <input type="range" id="lab-${t.key}" data-param="${t.key}" min="${n.min}" max="${n.max}" step="${n.step}" value="${s[t.key]}"></label>`}).join("")}
+    </div>
+    <div class="toggles">
+      ${pn.map(t=>`<label class="toggle"><input type="checkbox" id="lab-${t.key}" data-param="${t.key}" ${s[t.key]?"checked":""}><span><b>${$(t.label)}</b> ${$(t.note)}</span></label>`).join("")}
+    </div>
+    <div class="lab-actions">
+      <button type="button" class="btn primary" data-labrestart>Restart with these settings</button>
+      <button type="button" class="btn ghost" data-labreset>Back to the defaults</button>
+    </div>
+    <h3>Do something now</h3>
+    <div class="injects">
+      ${fn.map(t=>`<button type="button" class="inject" data-inject="${t.kind}"><b>${$(t.label)}</b><span>${$(t.note)}</span></button>`).join("")}
+    </div>`,cs||bn()}function gn(){c.ready&&ds()}var ts=()=>String(Math.floor(1e3+Math.random()*9e3));function bn(){cs=!0;let s=v("panel-lab");s.addEventListener("click",e=>{let t=e.target.closest("[data-scenario]");if(t){c.show=null,te({scenario:t.dataset.scenario,params:{},then:()=>Oe(`${c.scenarios[t.dataset.scenario].label}: press Play`)});return}let n=e.target.closest("[data-seedmode]");if(n){te({seed:n.dataset.seedmode==="default"?Ie:ts()});return}if(e.target.closest("[data-newseed]")){te({seed:ts()});return}if(e.target.closest("[data-labrestart]")){te();return}if(e.target.closest("[data-labreset]")){te({params:{}});return}let o=e.target.closest("[data-inject]");o&&(Q.send({type:"inject",kind:o.dataset.inject}),c.custom=!0,xe(v("stage")))}),s.addEventListener("input",e=>{let t=e.target;if(!t.dataset.param||t.type!=="range")return;let n=hs.find(o=>o.key===t.dataset.param);s.querySelector(`[data-out="${n.key}"]`).textContent=n.fmt(Number(t.value))}),s.addEventListener("change",e=>{let t=e.target;if(t.id==="seed"){let a=t.value.trim();a&&te({seed:a});return}let n=t.dataset.param;if(!n)return;let o=t.type==="checkbox"?t.checked:Number(t.value);c.labParams[n]=o,Q.send({type:"set",patch:{[n]:o}}),c.custom=!0})}var Xe={emerges:["Emerges","Nothing in the model aims at this number."],tuned:["Tuned","Constants were chosen so this lands near the real value."],built:["Built in","A rule of the model makes this happen; the check shows it plays out."]};function We(){let s=c.done&&c.genome&&c.points.length>10,e=c.checkView==="run"&&s,t=e?it({last:J(),genome:c.genome}):c.validation??_s,n=!c.validation&&!e,o=t?t.checks.map(a=>`<li class="check ${a.pass?"pass":"miss"}">
+          <div class="check-head"><span class="badge">${a.pass?"Match":"Miss"}</span><span class="check-what">${$(a.what)}</span></div>
+          <dl><dt>Model</dt><dd>${$(a.model)}</dd><dt>Real</dt><dd>${$(a.real)}</dd></dl>
+          ${a.note?`<p class="why">${$(a.note)}</p>`:""}
+          <p class="source"><span class="how how-${a.how}" title="${$(Xe[a.how][1])}">${Xe[a.how][0]}</span> ${$(a.source)}</p></li>`).join(""):'<li class="check">Press the button to run the check.</li>';v("panel-check").innerHTML=`
+    <h2>Validation</h2>
+    <p class="lede">The default run to generation 300,000, plus two what-if runs, set beside what is known from real cells. Every check is fixed in advance; a miss would be shown, not tuned away.</p>
+    <div class="check-tabs" role="radiogroup">
+      <button type="button" class="chip" data-checkview="model" aria-pressed="${!e}">The default run</button>
+      <button type="button" class="chip" data-checkview="run" aria-pressed="${e}" ${s?"":"disabled"}>Your run${s?"":" (finish it first)"}</button>
+    </div>
+    ${t?`<p class="score"><b>${t.passed}</b> of ${t.total} checks match real cells</p>`:""}
+    <div class="check-run" ${e?"hidden":""}>
+      <span class="hint">${n?"Computed when this page was built.":"Computed just now, in your browser."}</span>
+      <button type="button" class="btn ghost small" data-validate>Run it again here</button>
+      <span class="progress" id="check-progress" hidden><span></span></span>
+    </div>
+    ${e?'<p class="hint">Your run is scored on the checks that need only one run; the what-if checks need their own runs.</p>':""}
+    <dl class="how-key">${Object.values(Xe).map(([a,r],h)=>`<dt><span class="how how-${Object.keys(Xe)[h]}">${a}</span></dt><dd>${$(r)}</dd>`).join("")}</dl>
+    <ol class="checks">${o}</ol>
+    <h3>About the model</h3>
+    ${Zt.map(a=>`<p>${$(a)}</p>`).join("")}`}function yn(){v("panel-check").addEventListener("click",async s=>{let e=s.target.closest("[data-checkview]");if(e&&!e.disabled){c.checkView=e.dataset.checkview,We();return}let t=s.target.closest("[data-validate]");if(t&&!t.disabled){t.disabled=!0,t.textContent="Running…",v("check-progress").hidden=!1;try{c.validation=await Q.validate(n=>{let o=v("check-progress");o&&(o.firstElementChild.style.width=`${Math.round(100*n.step/n.total)}%`)})}catch(n){as(String(n.message??n))}We()}})}function tt(s){v("sheet-body").innerHTML=s,v("sheet").hidden=!1,v("sheet-backdrop").hidden=!1,v("sheet-close").focus({preventScroll:!0})}function Qe(){v("sheet").hidden=!0,v("sheet-backdrop").hidden=!0}function wn(s,e){let t=e!==void 0?c.points.find(o=>o.step===e)??J():J();if(!t)return;let n=Jt(s,t);n&&tt(`
+    <p class="kicker">${e!==void 0?"At":"Now, at"} generation ${Ze(t.gen)}</p>
+    <h2>${$(n.title)}</h2>
+    <p class="sheet-value">${n.value}</p>
+    ${n.html.filter(Boolean).map(o=>`<p>${o}</p>`).join("")}
+    ${n.chart?`<button type="button" class="btn ghost small" data-gochart="${n.chart}">See it on the charts</button>`:""}`)}function kn(s){let e=dt[s];e&&tt(`<p class="kicker">Glossary</p><h2>${$(e[0])}</h2><p>${$(e[1])}</p>`)}function vn(s){let e=s.kind,t=s.name?`<i>${$(s.name)}</i>`:`A gene for ${$(e.label.toLowerCase())}`,n=s.guests?s.inSym&&s.inNuc?"Kept by the guests, with a working copy in the host":s.inSym?"Kept by the guests":s.inNuc?"Moved to the host genome":"Lost":"In a free-living bacterium",o=s.prot?s.tm>0?`Its protein crosses the membrane ${s.tm===1?"once":`${s.tm} times`}: the more often, the harder it is to import.`:"Its protein is soluble, so once the host makes it, it is easy to import.":s.name?.startsWith("trn")?"A transfer RNA for the guests’ own ribosomes. RNA is very hard to import; only some lineages manage it for transfer RNAs.":"A ribosomal or other RNA for the guests’ own ribosomes. It cannot be imported, so it stays as long as the guests make any protein themselves.",a=e.key==="outside"||e.key==="supply"?"Not needed inside a host, so it can simply be lost.":"Still needed inside a host: it can go only once the host makes it and gets it into the guests.";tt(`
+    <p class="kicker">${$(e.label)}</p>
+    <h2>${t}</h2>
+    <p class="sheet-value">${$(n)}</p>
+    <p>${$(e.about)}</p>
+    <p>${$(o)}${s.corr?" It is part of the redox core of the respiratory chain, which by the CoRR idea stays under the guests’ own control.":""}</p>
+    <p>${$(a)}</p>`)}function xn(){document.addEventListener("click",s=>{let e=s.target.closest(".term[data-term]");if(e){kn(e.dataset.term);return}let t=s.target.closest("[data-explain]");if(t){wn(t.dataset.explain,t.dataset.step!==void 0?Number(t.dataset.step):void 0);return}if(s.target.closest("[data-gochart]")){Qe(),Qs();return}let o=s.target.closest("#events li");o&&(c.cursor=Number(o.dataset.gen),c.chartsDirty=!0,xe(v("charts"),"center"))}),v("scene").addEventListener("click",s=>{if(c.view!=="genes")return;let e=v("scene").getBoundingClientRect(),t=ie.geneAt(s.clientX-e.left,s.clientY-e.top);t&&vn(t)}),v("sheet-close").addEventListener("click",Qe),v("sheet-backdrop").addEventListener("click",Qe),document.addEventListener("keydown",s=>{s.key==="Escape"&&!v("sheet").hidden&&Qe()}),v("scene-help").addEventListener("click",()=>{let s=ve.find(e=>e.key===c.view)??ve[0];tt(`<p class="kicker">The picture: ${$(s.label)}</p><h2>How to read it</h2>${Qt[s.key].map(e=>`<p>${$(e)}</p>`).join("")}`)}),v("tabs").addEventListener("click",s=>{let e=s.target.closest("[data-tab]");e&&(e.dataset.tab!=="watch"&&(c.fromLesson=!1),Ne(e.dataset.tab))}),v("tabs").addEventListener("keydown",s=>{if(s.key!=="ArrowRight"&&s.key!=="ArrowLeft")return;let e=[...document.querySelectorAll("[data-tab]")].filter(o=>o.offsetParent!==null),t=e.findIndex(o=>o.dataset.tab===c.tab),n=e[(t+(s.key==="ArrowRight"?1:e.length-1))%e.length];Ne(n.dataset.tab),n.focus()}),v("back-to-lesson").addEventListener("click",()=>{c.fromLesson=!1,Ne("learn"),xe(v("panel-learn"))})}function us(s){ie.draw(s),c.dirty&&(c.dirty=!1,tn(),an()),rn(s),c.chartsDirty&&(s-c.lastCharts>150||!c.running)&&hn(s),requestAnimationFrame(us)}function Mn(){en(),sn(),on(),ft(),mn(),yn(),dn(),xn(),We(),ie.setView(c.view),v("scene-wrap").dataset.view=c.view,es(),Pe.addEventListener?.("change",es);let s=v("bar"),e=()=>document.documentElement.style.setProperty("--bar-h",`${s.offsetHeight}px`);new ResizeObserver(e).observe(s),e();let t=new ResizeObserver(()=>et());t.observe(v("scene")),t.observe(v("charts")),window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",()=>{Ce=null,c.chartsDirty=!0}),new MutationObserver(()=>{Ce=null,c.chartsDirty=!0}).observe(document.documentElement,{attributes:!0,attributeFilter:["data-theme","class"]}),Q=Wt(Ys),window.__euk={state:c,host:Q},An(),requestAnimationFrame(us)}function An(){let s=window.claude?.hot,e=!1,t=n=>{if(e)return;e=!0;let o=n&&typeof n=="object"?n:{},a=Number(o.step);te({seed:typeof o.seed=="string"&&o.seed?o.seed:Ie,scenario:typeof o.scenario=="string"?o.scenario:"real",params:o.params&&typeof o.params=="object"?o.params:{},then:Number.isFinite(a)&&a>0?()=>os(a):null})};try{s?.snapshot?.(()=>({seed:c.seed,scenario:c.scenario,params:{...c.labParams},step:le()})),s?.ready?(s.ready(t),setTimeout(()=>t({}),1500)):t(s?.data??{})}catch{t({})}}Mn();})();
+</script>
